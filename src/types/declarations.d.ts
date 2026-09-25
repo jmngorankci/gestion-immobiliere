@@ -1,0 +1,58 @@
+declare module 'lucide-react' {
+  import { FC, SVGProps } from 'react';
+  export interface IconProps extends SVGProps<SVGSVGElement> {
+    size?: number | string;
+    color?: string;
+    strokeWidth?: number | string;
+    className?: string;
+  }
+  export type Icon = FC<IconProps>;
+  export const LayoutDashboard: Icon;
+  export const CreditCard: Icon;
+  export const Building2: Icon;
+  export const Building: Icon;
+  export const Wrench: Icon;
+  export const Wallet: Icon;
+  export const LogOut: Icon;
+  export const ShieldCheck: Icon;
+  export const Bell: Icon;
+  export const Menu: Icon;
+  export const X: Icon;
+  export const FileSpreadsheet: Icon;
+  export const CheckCircle2: Icon;
+  export const Clock: Icon;
+  export const RefreshCw: Icon;
+  export const Printer: Icon;
+  export const Download: Icon;
+  export const Phone: Icon;
+  export const Mail: Icon;
+  export const MapPin: Icon;
+  export const AlertTriangle: Icon;
+  export const AlertCircle: Icon;
+  export const FileText: Icon;
+  export const User: Icon;
+  export const ExternalLink: Icon;
+  export const Eye: Icon;
+  export const XCircle: Icon;
+  export const FileCheck2: Icon;
+  export const Search: Icon;
+  export const Filter: Icon;
+  export const ArrowUpDown: Icon;
+  export const PlusCircle: Icon;
+  export const Calendar: Icon;
+  export const DollarSign: Icon;
+  export const Tag: Icon;
+  export const ArrowRight: Icon;
+  export const Home: Icon;
+  export const ChevronRight: Icon;
+  export const Camera: Icon;
+  export const Sparkles: Icon;
+  export const Users: Icon;
+  export const ArrowUpRight: Icon;
+  export const TrendingUp: Icon;
+  export const Plus: Icon;
+  export const Smartphone: Icon;
+  export const Receipt: Icon;
+  export const Zap: Icon;
+  export const Lock: Icon;
+}
