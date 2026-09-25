@@ -58,4 +58,7 @@ declare module 'lucide-react' {
   export const UserCheck: Icon;
   export const Edit: Icon;
   export const Trash2: Icon;
+  export const KeyRound: Icon;
+  export const Copy: Icon;
+  export const Share2: Icon;
 }

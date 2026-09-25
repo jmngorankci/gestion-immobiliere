@@ -35,6 +35,7 @@ export const TenantDashboard: React.FC = () => {
     enregistrerPaiementLocataire,
     mettreAJourProfilLocataire,
     setCurrentUser,
+    deconnexion,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<'loyer' | 'recus' | 'travaux' | 'profil'>('loyer');
@@ -143,9 +144,12 @@ export const TenantDashboard: React.FC = () => {
         </div>
 
         <button
-          onClick={() => (window.location.href = '/')}
-          className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-          title="Changer d'espace"
+          onClick={() => {
+            deconnexion();
+            window.location.href = '/auth/locataire';
+          }}
+          className="p-2 text-rose-400 hover:text-rose-300 rounded-lg hover:bg-slate-800 transition"
+          title="Se déconnecter"
         >
           <LogOut className="w-4 h-4" />
         </button>

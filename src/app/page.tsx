@@ -114,11 +114,10 @@ export default function HomePage() {
 
             <div className="pt-8">
               <Link
-                href="/dashboard"
-                onClick={handleSelectAdmin}
+                href="/auth/cabinet"
                 className="w-full py-3.5 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm flex items-center justify-center space-x-2 shadow-lg shadow-emerald-700/20 active:scale-95 transition"
               >
-                <span>Accéder au Dashboard Cabinet</span>
+                <span>Connexion Espace Cabinet</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
@@ -136,7 +135,7 @@ export default function HomePage() {
                   Espace Locataire (Mobile-First)
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Portail locataire réactif avec authentification OTP
+                  Portail locataire avec accès attribué par le cabinet
                 </p>
               </div>
 
@@ -162,11 +161,10 @@ export default function HomePage() {
 
             <div className="pt-8">
               <Link
-                href="/portal"
-                onClick={handleSelectTenant}
+                href="/auth/locataire"
                 className="w-full py-3.5 px-6 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm flex items-center justify-center space-x-2 shadow-lg shadow-teal-700/20 active:scale-95 transition"
               >
-                <span>Ouvrir le Portail Locataire Mobile</span>
+                <span>Connexion Espace Locataire</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>

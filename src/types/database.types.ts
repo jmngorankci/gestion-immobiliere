@@ -24,6 +24,9 @@ export interface Database {
           role: UserRole;
           avatar_url: string | null;
           email: string | null;
+          mot_de_passe?: string | null;
+          code_pin?: string | null;
+          est_actif: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -34,6 +37,9 @@ export interface Database {
           role?: UserRole;
           avatar_url?: string | null;
           email?: string | null;
+          mot_de_passe?: string | null;
+          code_pin?: string | null;
+          est_actif?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -44,6 +50,9 @@ export interface Database {
           role?: UserRole;
           avatar_url?: string | null;
           email?: string | null;
+          mot_de_passe?: string | null;
+          code_pin?: string | null;
+          est_actif?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -163,17 +172,17 @@ export interface Database {
         Row: {
           id: string;
           contrat_id: string;
-          mois_concerne: number; // 1 to 12
-          annee_concernee: number; // ex: 2026
+          mois_concerne: number;
+          annee_concernee: number;
           montant_total_paye: number;
-          commission_cabinet: number; // 10%
-          montant_reversable_proprietaire: number; // 90%
+          commission_cabinet: number;
+          montant_reversable_proprietaire: number;
           mode_paiement: PaymentMode;
           statut: PaymentStatus;
-          valide_par: string | null; // profile_id of validator
+          valide_par: string | null;
           date_validation: string | null;
-          numero_recu: string | null; // e.g. REC-2026-0001
-          reference_transaction: string | null; // e.g. Wave ID / Virement ref
+          numero_recu: string | null;
+          reference_transaction: string | null;
           preuve_paiement_url: string | null;
           notes: string | null;
           created_at: string;
@@ -263,7 +272,6 @@ export interface Database {
   };
 }
 
-// Convenient joined types for business UI & receipts
 export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type Proprietaire = Database['public']['Tables']['proprietaires']['Row'];
 export type Bien = Database['public']['Tables']['biens']['Row'];

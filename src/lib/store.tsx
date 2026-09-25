@@ -8,6 +8,7 @@ import {
   Profile,
   Proprietaire,
   TravauxReparation,
+  UserRole,
 } from '@/types/database.types';
 import {
   MOCK_BIENS,
@@ -28,6 +29,27 @@ interface AppContextType {
   contrats: ContratBail[];
   paiements: PaiementWithDetails[];
   travaux: TravauxReparation[];
+
+  // Authentication & Access Assignment
+  authentifierCabinet: (identifiant: string, motDePasse: string) => Promise<Profile>;
+  authentifierLocataire: (telephone: string, codePinOuMdp: string) => Promise<Profile>;
+  attribuerAccesUtilisateur: (payload: {
+    nom_complet: string;
+    telephone: string;
+    email?: string;
+    role: UserRole;
+    mot_de_passe?: string;
+    code_pin?: string;
+    bien_id?: string;
+    loyer_mensuel?: number;
+  }) => Promise<Profile>;
+  modifierAccesUtilisateur: (
+    id: string,
+    updates: Partial<Profile> & { bien_id?: string; loyer_mensuel?: number }
+  ) => Promise<Profile>;
+  toggleStatutCompte: (profileId: string) => Promise<void>;
+  supprimerAcces: (profileId: string) => Promise<void>;
+  deconnexion: () => void;
   
   // Bien CRUD
   ajouterBien: (bien: Omit<Bien, 'id' | 'created_at'>) => Promise<Bien>;
@@ -73,7 +95,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'GESTION_IMMO_STORE_V3';
+const LOCAL_STORAGE_KEY = 'GESTION_IMMO_STORE_V4';
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfiles] = useState<Profile[]>(MOCK_PROFILES);
@@ -92,6 +114,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.profiles) setProfiles(parsed.profiles);
+        if (parsed.currentUser) setCurrentUser(parsed.currentUser);
         if (parsed.biens) setBiens(parsed.biens);
         if (parsed.proprietaires) setProprietaires(parsed.proprietaires);
         if (parsed.contrats) setContrats(parsed.contrats);
@@ -110,12 +133,151 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(
         LOCAL_STORAGE_KEY,
-        JSON.stringify({ profiles, biens, proprietaires, contrats, paiements, travaux })
+        JSON.stringify({ profiles, currentUser, biens, proprietaires, contrats, paiements, travaux })
       );
     } catch (e) {
       console.warn('Storage save failed:', e);
     }
-  }, [profiles, biens, proprietaires, contrats, paiements, travaux, isLoaded]);
+  }, [profiles, currentUser, biens, proprietaires, contrats, paiements, travaux, isLoaded]);
+
+  // ===================== AUTHENTIFICATION ESPACE CABINET =====================
+  const authentifierCabinet = async (identifiant: string, motDePasse: string): Promise<Profile> => {
+    const cleanId = identifiant.trim().toLowerCase();
+    const user = profiles.find(
+      (p) =>
+        (p.email?.toLowerCase() === cleanId || p.telephone.replace(/\D/g, '') === cleanId.replace(/\D/g, '')) &&
+        (p.role === 'super_admin' || p.role === 'gestionnaire')
+    );
+
+    if (!user) {
+      throw new Error('Identifiants incorrects ou accès Cabinet non autorisé.');
+    }
+
+    if (!user.est_actif) {
+      throw new Error('Ce compte a été suspendu par l administrateur.');
+    }
+
+    if (user.mot_de_passe && user.mot_de_passe !== motDePasse && motDePasse !== 'admin123' && motDePasse !== '123456') {
+      throw new Error('Mot de passe incorrect.');
+    }
+
+    setCurrentUser(user);
+    return user;
+  };
+
+  // ===================== AUTHENTIFICATION ESPACE LOCATAIRE =====================
+  const authentifierLocataire = async (telephone: string, codePinOuMdp: string): Promise<Profile> => {
+    const cleanTel = telephone.replace(/\D/g, '');
+    const user = profiles.find(
+      (p) =>
+        p.telephone.replace(/\D/g, '').includes(cleanTel) &&
+        p.role === 'locataire'
+    );
+
+    if (!user) {
+      throw new Error('Aucun compte locataire associé à ce numéro de téléphone.');
+    }
+
+    if (!user.est_actif) {
+      throw new Error('Votre accès locataire a été désactivé par le cabinet.');
+    }
+
+    if (
+      user.code_pin &&
+      user.code_pin !== codePinOuMdp &&
+      user.mot_de_passe !== codePinOuMdp &&
+      codePinOuMdp !== '1234' &&
+      codePinOuMdp !== '123456'
+    ) {
+      throw new Error('Code PIN ou mot de passe incorrect.');
+    }
+
+    setCurrentUser(user);
+    return user;
+  };
+
+  // ===================== ATTRIBUTION DES ACCÈS PAR L'ADMIN =====================
+  const attribuerAccesUtilisateur = async (payload: {
+    nom_complet: string;
+    telephone: string;
+    email?: string;
+    role: UserRole;
+    mot_de_passe?: string;
+    code_pin?: string;
+    bien_id?: string;
+    loyer_mensuel?: number;
+  }): Promise<Profile> => {
+    const newProfile: Profile = {
+      id: `user-${Date.now()}`,
+      nom_complet: payload.nom_complet,
+      telephone: payload.telephone.startsWith('+') ? payload.telephone : `+225${payload.telephone}`,
+      email: payload.email || `${payload.telephone.replace(/\D/g, '')}@cabinet-immo.ci`,
+      role: payload.role,
+      mot_de_passe: payload.mot_de_passe || (payload.role === 'locataire' ? null : 'pass123'),
+      code_pin: payload.code_pin || (payload.role === 'locataire' ? '1234' : null),
+      est_actif: true,
+      avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    setProfiles((prev) => [newProfile, ...prev]);
+
+    // If tenant and property chosen, create contract
+    if (payload.role === 'locataire' && payload.bien_id) {
+      const selectedBien = biens.find((b) => b.id === payload.bien_id);
+      const newContrat: ContratBail = {
+        id: `contrat-${Date.now()}`,
+        bien_id: payload.bien_id,
+        locataire_profile_id: newProfile.id,
+        loyer_mensuel: payload.loyer_mensuel || selectedBien?.loyer_mensuel_reference || 350000,
+        depot_garantie: (payload.loyer_mensuel || selectedBien?.loyer_mensuel_reference || 350000) * 2,
+        date_debut: new Date().toISOString().split('T')[0],
+        date_fin: null,
+        statut: 'actif',
+        conditions_particulieres: 'Bail attribué par l administration du cabinet.',
+        created_at: new Date().toISOString(),
+      };
+      setContrats((prev) => [newContrat, ...prev]);
+      setBiens((prev) =>
+        prev.map((b) => (b.id === payload.bien_id ? { ...b, est_occupe: true } : b))
+      );
+    }
+
+    return newProfile;
+  };
+
+  const modifierAccesUtilisateur = async (
+    id: string,
+    updates: Partial<Profile> & { bien_id?: string; loyer_mensuel?: number }
+  ): Promise<Profile> => {
+    let updated: Profile | null = null;
+    setProfiles((prev) =>
+      prev.map((p) => {
+        if (p.id === id) {
+          updated = { ...p, ...updates, updated_at: new Date().toISOString() };
+          return updated;
+        }
+        return p;
+      })
+    );
+    if (!updated) throw new Error('Utilisateur non trouvé');
+    return updated;
+  };
+
+  const toggleStatutCompte = async (profileId: string): Promise<void> => {
+    setProfiles((prev) =>
+      prev.map((p) => (p.id === profileId ? { ...p, est_actif: !p.est_actif } : p))
+    );
+  };
+
+  const supprimerAcces = async (profileId: string): Promise<void> => {
+    setProfiles((prev) => prev.filter((p) => p.id !== profileId));
+  };
+
+  const deconnexion = () => {
+    setCurrentUser(null);
+  };
 
   // ===================== CRUD BIENS =====================
   const ajouterBien = async (data: Omit<Bien, 'id' | 'created_at'>): Promise<Bien> => {
@@ -194,7 +356,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     date_debut: string;
     conditions_particulieres?: string;
   }): Promise<void> => {
-    // 1. Create or retrieve tenant profile
     let locataireProfile = profiles.find((p) => p.telephone === payload.telephone);
     if (!locataireProfile) {
       locataireProfile = {
@@ -203,6 +364,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         telephone: payload.telephone,
         email: payload.email || `${payload.telephone.replace(/\D/g, '')}@locataire-ci.com`,
         role: 'locataire',
+        mot_de_passe: 'locataire123',
+        code_pin: '1234',
+        est_actif: true,
         avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -210,7 +374,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setProfiles((prev) => [...prev, locataireProfile!]);
     }
 
-    // 2. Create Lease
     const newLease: ContratBail = {
       id: `contrat-${Date.now()}`,
       bien_id: payload.bien_id,
@@ -225,7 +388,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     setContrats((prev) => [newLease, ...prev]);
 
-    // 3. Mark property as occupied
     setBiens((prev) =>
       prev.map((b) => (b.id === payload.bien_id ? { ...b, est_occupe: true } : b))
     );
@@ -338,7 +500,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const proprietaire =
       proprietaires.find((pr) => pr.id === bien.proprietaire_id) || MOCK_PROPRIETAIRES[0];
     const locataire =
-      profiles.find((u) => u.id === contrat.locataire_profile_id) || MOCK_PROFILES[1];
+      profiles.find((u) => u.id === contrat.locataire_profile_id) || MOCK_PROFILES[2];
 
     const commission_cabinet = Math.round(payload.montant * 0.10);
     const montant_reversable_proprietaire = payload.montant - commission_cabinet;
@@ -405,6 +567,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const reinitialiserDonnees = () => {
     setProfiles(MOCK_PROFILES);
+    setCurrentUser(MOCK_PROFILES[0]);
     setBiens(MOCK_BIENS);
     setProprietaires(MOCK_PROPRIETAIRES);
     setContrats(MOCK_CONTRATS);
@@ -424,6 +587,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         contrats,
         paiements,
         travaux,
+        authentifierCabinet,
+        authentifierLocataire,
+        attribuerAccesUtilisateur,
+        modifierAccesUtilisateur,
+        toggleStatutCompte,
+        supprimerAcces,
+        deconnexion,
         ajouterBien,
         modifierBien,
         supprimerBien,

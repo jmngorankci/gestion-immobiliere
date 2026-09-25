@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
 import {
   LayoutDashboard,
@@ -19,11 +19,13 @@ import {
   CheckCircle2,
   Clock,
   RefreshCw,
+  Users,
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { currentUser, paiements, reinitialiserDonnees } = useAppStore();
+  const router = useRouter();
+  const { currentUser, paiements, profiles, deconnexion, reinitialiserDonnees } = useAppStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const pendingCount = paiements.filter((p) => p.statut === 'en_attente').length;
@@ -55,7 +57,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       href: '/reversements',
       icon: Wallet,
     },
+    {
+      label: 'Attribution des Accès',
+      href: '/utilisateurs',
+      icon: Users,
+      badge: profiles.length > 0 ? profiles.length : null,
+    },
   ];
+
+  const handleLogout = () => {
+    deconnexion();
+    router.push('/auth/cabinet');
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row text-slate-900">
@@ -98,7 +111,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <span>{item.label}</span>
                 </div>
                 {item.badge && (
-                  <span className="bg-amber-500 text-slate-950 text-xs font-black px-2 py-0.5 rounded-full">
+                  <span
+                    className={`text-xs font-black px-2 py-0.5 rounded-full ${
+                      item.href === '/encaissements'
+                        ? 'bg-amber-500 text-slate-950'
+                        : 'bg-slate-800 text-slate-300'
+                    }`}
+                  >
                     {item.badge}
                   </span>
                 )}
@@ -107,26 +126,38 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        {/* User Card & Reset demo */}
+        {/* User Card & Authentication */}
         <div className="p-4 border-t border-slate-800 space-y-3">
-          <div className="flex items-center space-x-3 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-            <img
-              src={currentUser?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-              alt="Admin"
-              className="w-10 h-10 rounded-full border border-emerald-500/50 object-cover"
-            />
-            <div className="overflow-hidden">
-              <p className="font-bold text-xs text-white truncate">{currentUser?.nom_complet}</p>
-              <p className="text-[10px] text-emerald-400 uppercase font-semibold">Super Admin</p>
+          <div className="flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+            <div className="flex items-center space-x-2.5 overflow-hidden">
+              <img
+                src={currentUser?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
+                alt="Admin"
+                className="w-9 h-9 rounded-full border border-emerald-500/50 object-cover shrink-0"
+              />
+              <div className="overflow-hidden">
+                <p className="font-bold text-xs text-white truncate">{currentUser?.nom_complet || 'Administrateur'}</p>
+                <p className="text-[10px] text-emerald-400 uppercase font-semibold capitalize">
+                  {currentUser?.role?.replace('_', ' ') || 'Super Admin'}
+                </p>
+              </div>
             </div>
+
+            <button
+              onClick={handleLogout}
+              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition"
+              title="Déconnexion"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
 
           <div className="flex items-center space-x-2">
             <Link
-              href="/"
-              className="flex-1 text-center py-2 px-3 text-xs font-semibold bg-slate-900 text-slate-300 hover:text-white rounded-lg border border-slate-800 hover:bg-slate-800 transition"
+              href="/utilisateurs"
+              className="flex-1 text-center py-2 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow transition"
             >
-              Changer d'Espace
+              + Attribuer un Accès
             </Link>
             <button
               onClick={reinitialiserDonnees}
@@ -146,12 +177,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <span className="font-bold text-sm uppercase">Cabinet Ivoire Immo</span>
         </div>
 
-        <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
-        >
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleLogout}
+            className="p-2 text-rose-400 hover:bg-slate-800 rounded-lg text-xs"
+            title="Déconnexion"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </header>
 
       {/* Mobile Menu Dropdown */}
@@ -172,13 +212,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               )}
             </Link>
           ))}
-          <Link
-            href="/"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block text-center p-3 rounded-xl text-xs font-bold text-slate-400 bg-slate-900"
+          <button
+            onClick={handleLogout}
+            className="w-full text-center p-3 rounded-xl text-xs font-bold text-rose-400 bg-slate-900"
           >
-            Changer d'espace (Portail Locataire)
-          </Link>
+            Se déconnecter de l'Espace Cabinet
+          </button>
         </div>
       )}
 
