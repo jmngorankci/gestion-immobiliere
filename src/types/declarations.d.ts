@@ -55,4 +55,7 @@ declare module 'lucide-react' {
   export const Receipt: Icon;
   export const Zap: Icon;
   export const Lock: Icon;
+  export const UserCheck: Icon;
+  export const Edit: Icon;
+  export const Trash2: Icon;
 }
