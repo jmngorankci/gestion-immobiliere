@@ -22,7 +22,17 @@ import {
   Copy,
   Smartphone,
   Share2,
+  Camera,
 } from 'lucide-react';
+
+const AVATAR_PRESETS = [
+  { label: 'Homme 1', url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' },
+  { label: 'Femme 1', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' },
+  { label: 'Homme 2', url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150' },
+  { label: 'Femme 2', url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150' },
+  { label: 'Homme 3', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
+  { label: 'Femme 3', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
+];
 
 export default function UtilisateursAccessPage() {
   const {
@@ -44,6 +54,7 @@ export default function UtilisateursAccessPage() {
   const [nom, setNom] = useState('');
   const [telephone, setTelephone] = useState('+225 ');
   const [email, setEmail] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [role, setRole] = useState<UserRole>('locataire');
   const [motDePasse, setMotDePasse] = useState('pass123');
   const [codePin, setCodePin] = useState('1234');
@@ -70,6 +81,7 @@ export default function UtilisateursAccessPage() {
     setNom('');
     setTelephone('+225 ');
     setEmail('');
+    setAvatarUrl('');
     setRole('locataire');
     setMotDePasse('pass123');
     setCodePin(String(Math.floor(1000 + Math.random() * 9000)));
@@ -84,6 +96,7 @@ export default function UtilisateursAccessPage() {
     setNom(p.nom_complet);
     setTelephone(p.telephone);
     setEmail(p.email || '');
+    setAvatarUrl(p.avatar_url || '');
     setRole(p.role);
     setMotDePasse(p.mot_de_passe || '');
     setCodePin(p.code_pin || '');
@@ -105,6 +118,7 @@ export default function UtilisateursAccessPage() {
           nom_complet: nom,
           telephone,
           email: email || null,
+          avatar_url: avatarUrl.trim() || null,
           role,
           mot_de_passe: motDePasse || null,
           code_pin: codePin || null,
@@ -114,6 +128,7 @@ export default function UtilisateursAccessPage() {
           nom_complet: nom,
           telephone,
           email: email || undefined,
+          avatar_url: avatarUrl.trim() || undefined,
           role,
           mot_de_passe: motDePasse || undefined,
           code_pin: codePin || undefined,
@@ -513,6 +528,85 @@ export default function UtilisateursAccessPage() {
                     placeholder="agent@cabinet-immo.ci"
                     className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500"
                   />
+                </div>
+              </div>
+
+              {/* Photo de Profil / Avatar (Personnalisable ou Défaut) */}
+              <div className="space-y-2 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-700 uppercase flex items-center">
+                    <Camera className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+                    Photo de Profil / Avatar
+                  </label>
+                  {avatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setAvatarUrl('')}
+                      className="text-[11px] text-rose-600 hover:underline font-semibold"
+                    >
+                      Réinitialiser (par défaut)
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  {/* Aperçu en direct */}
+                  <div className="relative shrink-0">
+                    <img
+                      src={
+                        avatarUrl ||
+                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'
+                      }
+                      alt="Aperçu avatar"
+                      className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 shadow-sm"
+                    />
+                    {!avatarUrl && (
+                      <span className="absolute -bottom-1 -right-1 bg-slate-800 text-white text-[9px] px-1 py-0.5 rounded-full font-bold">
+                        Auto
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-1">
+                    <input
+                      type="text"
+                      value={avatarUrl}
+                      onChange={(e) => setAvatarUrl(e.target.value)}
+                      placeholder="URL de la photo (https://...) ou choisir un modèle ci-dessous"
+                      className="w-full text-xs p-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      Laissez vide pour attribuer automatiquement un avatar par défaut.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Galerie de modèles rapides */}
+                <div className="pt-2 border-t border-slate-200/80">
+                  <span className="text-[10px] font-bold text-slate-500 block mb-1.5">
+                    Modèles rapides en un clic :
+                  </span>
+                  <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+                    {AVATAR_PRESETS.map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setAvatarUrl(preset.url)}
+                        className={`relative rounded-full transition p-0.5 ${
+                          avatarUrl === preset.url
+                            ? 'ring-2 ring-emerald-600 scale-105 shadow-md'
+                            : 'hover:opacity-80 hover:scale-105'
+                        }`}
+                        title={preset.label}
+                      >
+                        <img
+                          src={preset.url}
+                          alt={preset.label}
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

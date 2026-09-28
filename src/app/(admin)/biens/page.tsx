@@ -40,6 +40,7 @@ export default function BiensPage() {
     supprimerProprietaire,
     ajouterLocataireEtContrat,
     modifierContrat,
+    modifierAccesUtilisateur,
     resilierContrat,
     supprimerContrat,
   } = useAppStore();
@@ -60,10 +61,10 @@ export default function BiensPage() {
   // Form states: Bien
   const [bienCode, setBienCode] = useState('');
   const [bienType, setBienType] = useState<PropertyType>('3_pieces');
-  const [bienLoyer, setBienLoyer] = useState<number>(450000);
+  const [bienLoyer, setBienLoyer] = useState<number | ''>('');
   const [bienCommune, setBienCommune] = useState('');
   const [bienAdresse, setBienAdresse] = useState('');
-  const [bienPropId, setBienPropId] = useState(proprietaires[0]?.id || '');
+  const [bienPropId, setBienPropId] = useState('');
   const [bienDescription, setBienDescription] = useState('');
   const [bienPhoto, setBienPhoto] = useState('');
 
@@ -79,24 +80,23 @@ export default function BiensPage() {
   const [locNom, setLocNom] = useState('');
   const [locTel, setLocTel] = useState('');
   const [locEmail, setLocEmail] = useState('');
-  const [locBienId, setLocBienId] = useState(biens[0]?.id || '');
-  const [locLoyer, setLocLoyer] = useState<number>(450000);
-  const [locCaution, setLocCaution] = useState<number>(900000);
+  const [locBienId, setLocBienId] = useState('');
+  const [locLoyer, setLocLoyer] = useState<number | ''>('');
+  const [locCaution, setLocCaution] = useState<number | ''>('');
   const [locDateDebut, setLocDateDebut] = useState(new Date().toISOString().split('T')[0]);
   const [locConditions, setLocConditions] = useState('');
 
   // Open Add Bien Modal
   const handleOpenAddBien = () => {
     setEditingBien(null);
-    const nextCode = `APP-ABJ-${String(biens.length + 1).padStart(3, '0')}`;
-    setBienCode(nextCode);
+    setBienCode('');
     setBienType('3_pieces');
-    setBienLoyer(450000);
-    setBienCommune('Cocody Riviera');
-    setBienAdresse('Résidence Prestige, 2ème étage');
+    setBienLoyer('');
+    setBienCommune('');
+    setBienAdresse('');
     setBienPropId(proprietaires[0]?.id || '');
     setBienDescription('');
-    setBienPhoto('https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=600&auto=format&fit=crop&q=80');
+    setBienPhoto('');
     setShowBienModal(true);
   };
 
@@ -117,7 +117,7 @@ export default function BiensPage() {
   // Submit Bien (Add or Update)
   const handleSubmitBien = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bienCode.trim() || !bienCommune.trim() || bienLoyer <= 0) {
+    if (!bienCode.trim() || !bienCommune.trim() || !bienLoyer || Number(bienLoyer) <= 0 || !bienPropId) {
       alert('Veuillez remplir correctement les champs obligatoires.');
       return;
     }
@@ -126,7 +126,7 @@ export default function BiensPage() {
       await modifierBien(editingBien.id, {
         code_reference: bienCode,
         type_bien: bienType,
-        loyer_mensuel_reference: bienLoyer,
+        loyer_mensuel_reference: Number(bienLoyer),
         commune_quartier: bienCommune,
         adresse_precise: bienAdresse,
         proprietaire_id: bienPropId,
@@ -137,7 +137,7 @@ export default function BiensPage() {
       await ajouterBien({
         code_reference: bienCode,
         type_bien: bienType,
-        loyer_mensuel_reference: bienLoyer,
+        loyer_mensuel_reference: Number(bienLoyer),
         commune_quartier: bienCommune,
         adresse_precise: bienAdresse,
         proprietaire_id: bienPropId,
@@ -154,9 +154,9 @@ export default function BiensPage() {
   const handleOpenAddProp = () => {
     setEditingProp(null);
     setPropNom('');
-    setPropTel('+225 ');
+    setPropTel('');
     setPropEmail('');
-    setPropAdresse('Abidjan, Côte d Ivoire');
+    setPropAdresse('');
     setPropMode('virement');
     setPropRib('');
     setShowPropModal(true);
@@ -209,35 +209,69 @@ export default function BiensPage() {
   const handleOpenAddLocataire = () => {
     setEditingContrat(null);
     setLocNom('');
-    setLocTel('+225 ');
+    setLocTel('');
     setLocEmail('');
-    const targetBien = biens.find((b) => !b.est_occupe) || biens[0];
-    setLocBienId(targetBien?.id || '');
-    setLocLoyer(targetBien?.loyer_mensuel_reference || 350000);
-    setLocCaution((targetBien?.loyer_mensuel_reference || 350000) * 2);
+    setLocBienId('');
+    setLocLoyer('');
+    setLocCaution('');
     setLocDateDebut(new Date().toISOString().split('T')[0]);
-    setLocConditions('Paiement avant le 05 de chaque mois. Animaux non admis.');
+    setLocConditions('');
+    setShowLocataireModal(true);
+  };
+
+  // Open Edit Locataire Modal
+  const handleOpenEditLocataire = (c: ContratBail) => {
+    setEditingContrat(c);
+    const loc = profiles.find((u) => u.id === c.locataire_profile_id);
+    setLocNom(loc?.nom_complet || '');
+    setLocTel(loc?.telephone || '');
+    setLocEmail(loc?.email || '');
+    setLocBienId(c.bien_id);
+    setLocLoyer(c.loyer_mensuel);
+    setLocCaution(c.depot_garantie);
+    setLocDateDebut(c.date_debut);
+    setLocConditions(c.conditions_particulieres || '');
     setShowLocataireModal(true);
   };
 
   // Submit Locataire & Contrat
   const handleSubmitLocataire = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!locNom.trim() || !locTel.trim() || !locBienId) {
+    if (!locNom.trim() || !locTel.trim() || !locBienId || !locLoyer || !locCaution) {
       alert('Veuillez remplir tous les champs obligatoires.');
       return;
     }
 
-    await ajouterLocataireEtContrat({
-      nom_complet: locNom,
-      telephone: locTel,
-      email: locEmail || undefined,
-      bien_id: locBienId,
-      loyer_mensuel: locLoyer,
-      depot_garantie: locCaution,
-      date_debut: locDateDebut,
-      conditions_particulieres: locConditions || undefined,
-    });
+    if (editingContrat) {
+      await modifierContrat(editingContrat.id, {
+        bien_id: locBienId,
+        loyer_mensuel: Number(locLoyer),
+        depot_garantie: Number(locCaution),
+        date_debut: locDateDebut,
+        conditions_particulieres: locConditions || undefined,
+      });
+
+      if (editingContrat.locataire_profile_id) {
+        await modifierAccesUtilisateur(editingContrat.locataire_profile_id, {
+          nom_complet: locNom,
+          telephone: locTel,
+          email: locEmail || undefined,
+          bien_id: locBienId,
+          loyer_mensuel: Number(locLoyer),
+        });
+      }
+    } else {
+      await ajouterLocataireEtContrat({
+        nom_complet: locNom,
+        telephone: locTel,
+        email: locEmail || undefined,
+        bien_id: locBienId,
+        loyer_mensuel: Number(locLoyer),
+        depot_garantie: Number(locCaution),
+        date_debut: locDateDebut,
+        conditions_particulieres: locConditions || undefined,
+      });
+    }
 
     setShowLocataireModal(false);
   };
@@ -633,10 +667,17 @@ export default function BiensPage() {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end space-x-1.5">
-                          {isActif ? (
+                          <button
+                            onClick={() => handleOpenEditLocataire(c)}
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition"
+                            title="Modifier le contrat / locataire"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          {isActif && (
                             <button
                               onClick={() => {
-                                if (confirm(`Résilier le contrat de bail pour ${loc?.nom_complet} ?`)) {
+                                if (confirm(`Résilier le contrat de bail pour ${loc?.nom_complet || 'ce locataire'} ?`)) {
                                   resilierContrat(c.id);
                                 }
                               }}
@@ -644,19 +685,18 @@ export default function BiensPage() {
                             >
                               Résilier
                             </button>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                if (confirm('Supprimer définitivement ce contrat résilié ?')) {
-                                  supprimerContrat(c.id);
-                                }
-                              }}
-                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg"
-                              title="Supprimer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
                           )}
+                          <button
+                            onClick={() => {
+                              if (confirm(`Supprimer définitivement le contrat de bail pour ${loc?.nom_complet || 'ce locataire'} ?`)) {
+                                supprimerContrat(c.id);
+                              }
+                            }}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition"
+                            title="Supprimer le contrat"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -730,9 +770,10 @@ export default function BiensPage() {
                   <input
                     type="number"
                     value={bienLoyer}
-                    onChange={(e) => setBienLoyer(Number(e.target.value))}
+                    onChange={(e) => setBienLoyer(e.target.value === '' ? '' : Number(e.target.value))}
                     min={10000}
                     step={5000}
+                    placeholder="Ex: 450000"
                     className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono font-bold"
                     required
                   />
@@ -748,6 +789,7 @@ export default function BiensPage() {
                     className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500"
                     required
                   >
+                    <option value="">-- Choisir un propriétaire --</option>
                     {proprietaires.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.nom_complet}
@@ -964,7 +1006,7 @@ export default function BiensPage() {
               <div className="flex items-center space-x-2.5">
                 <UserCheck className="w-5 h-5 text-emerald-400" />
                 <h3 className="font-bold text-base">
-                  Nouveau Contrat de Bail & Locataire
+                  {editingContrat ? 'Modifier le Contrat de Bail & Locataire' : 'Nouveau Contrat de Bail & Locataire'}
                 </h3>
               </div>
               <button
@@ -1039,6 +1081,7 @@ export default function BiensPage() {
                     className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl font-semibold"
                     required
                   >
+                    <option value="">-- Sélectionner un bien immobilier --</option>
                     {biens.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.code_reference} - {b.commune_quartier} ({formatFCFA(b.loyer_mensuel_reference)}/mois) {b.est_occupe ? '(Déjà occupé)' : '(Libre)'}
@@ -1053,7 +1096,8 @@ export default function BiensPage() {
                     <input
                       type="number"
                       value={locLoyer}
-                      onChange={(e) => setLocLoyer(Number(e.target.value))}
+                      onChange={(e) => setLocLoyer(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="Ex: 450000"
                       className="w-full text-xs p-2 bg-white border border-slate-300 rounded-xl font-mono font-bold"
                       required
                     />
@@ -1063,7 +1107,8 @@ export default function BiensPage() {
                     <input
                       type="number"
                       value={locCaution}
-                      onChange={(e) => setLocCaution(Number(e.target.value))}
+                      onChange={(e) => setLocCaution(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="Ex: 900000"
                       className="w-full text-xs p-2 bg-white border border-slate-300 rounded-xl font-mono font-bold"
                       required
                     />
@@ -1107,7 +1152,7 @@ export default function BiensPage() {
                   type="submit"
                   className="px-6 py-2 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-700/20 active:scale-95"
                 >
-                  Valider le Nouveau Bail
+                  {editingContrat ? 'Enregistrer les Modifications' : 'Valider le Nouveau Bail'}
                 </button>
               </div>
             </form>

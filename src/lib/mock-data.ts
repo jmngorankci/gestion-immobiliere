@@ -215,6 +215,7 @@ export const MOCK_TRAVAUX: TravauxReparation[] = [
     justificatif_facture_url: '/factures/facture-plomberie-001.pdf',
     prestataire_nom: 'Plomberie Moderne Abidjan (PMA)',
     est_regle: true,
+    statut: 'realise',
     created_at: '2026-09-11T10:00:00Z',
   },
   {
@@ -229,6 +230,7 @@ export const MOCK_TRAVAUX: TravauxReparation[] = [
     justificatif_facture_url: '/factures/facture-clim-002.pdf',
     prestataire_nom: 'Clim Ivoire Service',
     est_regle: true,
+    statut: 'realise',
     created_at: '2026-08-21T09:00:00Z',
   },
   {
@@ -242,7 +244,8 @@ export const MOCK_TRAVAUX: TravauxReparation[] = [
     loyer_impacte_annee: 2026,
     justificatif_facture_url: null,
     prestataire_nom: 'Elec Rapide Plateau',
-    est_regle: true,
+    est_regle: false,
+    statut: 'en_attente',
     created_at: '2026-09-18T14:00:00Z',
   },
 ];

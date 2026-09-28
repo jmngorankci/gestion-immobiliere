@@ -1,12 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { PaymentValidationTable } from '@/components/admin/PaymentValidationTable';
-import { CreditCard, ShieldCheck } from 'lucide-react';
+import { NewPaymentModal } from '@/components/admin/NewPaymentModal';
+import { CreditCard, PlusCircle } from 'lucide-react';
 
 export default function EncaissementsPage() {
   const { paiements, validerPaiement, rejeterPaiement } = useAppStore();
+  const [showNewPaymentModal, setShowNewPaymentModal] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -17,9 +19,17 @@ export default function EncaissementsPage() {
             Gestion des Encaissements & Quittances
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Validez les règlements déclarés par les locataires (Wave, Orange Money, Virement, Espèces) pour émettre automatiquement les reçus officiels séquentiels REC-2026-XXXX avec QR Code.
+            Enregistrez les nouveaux paiements et validez les règlements déclarés par les locataires (Wave, Orange Money, Virement, Espèces) pour émettre automatiquement les reçus officiels séquentiels REC-2026-XXXX avec QR Code.
           </p>
         </div>
+
+        <button
+          onClick={() => setShowNewPaymentModal(true)}
+          className="inline-flex items-center px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-700/20 active:scale-95 transition whitespace-nowrap"
+        >
+          <PlusCircle className="w-4 h-4 mr-2" />
+          + Nouvel Encaissement
+        </button>
       </div>
 
       <PaymentValidationTable
@@ -27,6 +37,12 @@ export default function EncaissementsPage() {
         onValidate={validerPaiement}
         onReject={rejeterPaiement}
       />
+
+      <NewPaymentModal
+        isOpen={showNewPaymentModal}
+        onClose={() => setShowNewPaymentModal(false)}
+      />
     </div>
   );
 }
+

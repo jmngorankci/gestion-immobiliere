@@ -12,6 +12,7 @@ export type LeaseStatus = 'actif' | 'resilie';
 export type PaymentMode = 'espece' | 'mobile_money' | 'virement';
 export type PaymentStatus = 'en_attente' | 'valide' | 'rejete';
 export type RepairImputation = 'non_impute' | 'impute_au_loyer' | 'a_la_charge_proprietaire' | 'a_la_charge_cabinet';
+export type RepairStatus = 'en_attente' | 'realise' | 'annule';
 
 export interface Database {
   public: {
@@ -237,6 +238,7 @@ export interface Database {
           justificatif_facture_url: string | null;
           prestataire_nom: string | null;
           est_regle: boolean;
+          statut?: RepairStatus;
           created_at: string;
         };
         Insert: {
@@ -251,6 +253,7 @@ export interface Database {
           justificatif_facture_url?: string | null;
           prestataire_nom?: string | null;
           est_regle?: boolean;
+          statut?: RepairStatus;
           created_at?: string;
         };
         Update: {
@@ -265,6 +268,7 @@ export interface Database {
           justificatif_facture_url?: string | null;
           prestataire_nom?: string | null;
           est_regle?: boolean;
+          statut?: RepairStatus;
           created_at?: string;
         };
       };

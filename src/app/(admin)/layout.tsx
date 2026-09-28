@@ -25,10 +25,27 @@ import {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, paiements, profiles, deconnexion, reinitialiserDonnees } = useAppStore();
+  const { currentUser, paiements, profiles, contrats, travaux, deconnexion, reinitialiserDonnees } = useAppStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const pendingCount = paiements.filter((p) => p.statut === 'en_attente').length;
+  const pendingRepairsCount = travaux.filter((t) => (t.statut || 'en_attente') === 'en_attente').length;
+  
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  const activeContrats = contrats.filter((c) => c.statut === 'actif');
+  const unpaidRentCount = activeContrats.filter((contrat) => {
+    const hasPaid = paiements.some(
+      (p) =>
+        p.contrat_id === contrat.id &&
+        p.mois_concerne === currentMonth &&
+        p.annee_concernee === currentYear &&
+        p.statut === 'valide'
+    );
+    return !hasPaid;
+  }).length;
+
+  const totalAlertsCount = pendingCount + pendingRepairsCount + unpaidRentCount;
 
   const navItems = [
     {
@@ -37,25 +54,33 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       icon: LayoutDashboard,
     },
     {
+      label: 'Parc Immobilier & Baux',
+      href: '/biens',
+      icon: Building2,
+    },
+    {
       label: 'Encaissements & Validation',
       href: '/encaissements',
       icon: CreditCard,
       badge: pendingCount > 0 ? pendingCount : null,
     },
     {
-      label: 'Parc Immobilier & Baux',
-      href: '/biens',
-      icon: Building2,
-    },
-    {
       label: 'Travaux & Imputations',
       href: '/travaux',
       icon: Wrench,
+      badge: pendingRepairsCount > 0 ? pendingRepairsCount : null,
     },
     {
-      label: 'Bordereaux Reversement',
+      label: 'Bordereaux & Reversements',
       href: '/reversements',
       icon: Wallet,
+    },
+    {
+      label: 'Gestion des Alertes',
+      href: '/alertes',
+      icon: Bell,
+      badge: totalAlertsCount > 0 ? totalAlertsCount : null,
+      isAlert: true,
     },
     {
       label: 'Attribution des Accès',
@@ -103,17 +128,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition group ${
                   isActive
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/40'
+                    : item.isAlert && item.badge
+                    ? 'text-rose-400 hover:text-white hover:bg-rose-950/40 bg-rose-950/20 border border-rose-900/40'
                     : 'text-slate-400 hover:text-white hover:bg-slate-900'
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-emerald-400'}`} />
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-white' : item.isAlert && item.badge ? 'text-rose-400 animate-pulse' : 'text-slate-400 group-hover:text-emerald-400'}`} />
                   <span>{item.label}</span>
                 </div>
                 {item.badge && (
                   <span
                     className={`text-xs font-black px-2 py-0.5 rounded-full ${
-                      item.href === '/encaissements'
+                      item.href === '/alertes'
+                        ? 'bg-rose-500 text-white animate-pulse'
+                        : item.href === '/encaissements'
                         ? 'bg-amber-500 text-slate-950'
                         : 'bg-slate-800 text-slate-300'
                     }`}
@@ -206,7 +235,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               <span>{item.label}</span>
               {item.badge && (
-                <span className="bg-amber-500 text-slate-950 text-xs font-black px-2 py-0.5 rounded-full">
+                <span
+                  className={`text-xs font-black px-2 py-0.5 rounded-full ${
+                    item.href === '/alertes'
+                      ? 'bg-rose-500 text-white'
+                      : item.href === '/encaissements'
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'bg-slate-800 text-slate-300'
+                  }`}
+                >
                   {item.badge}
                 </span>
               )}

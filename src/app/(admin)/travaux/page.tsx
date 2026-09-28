@@ -5,7 +5,7 @@ import { useAppStore } from '@/lib/store';
 import { RepairsManagement } from '@/components/admin/RepairsManagement';
 
 export default function TravauxPage() {
-  const { travaux, biens, ajouterTravaux } = useAppStore();
+  const { travaux, biens, ajouterTravaux, modifierTravaux, changerStatutTravaux, supprimerTravaux } = useAppStore();
 
   return (
     <div className="space-y-6">
@@ -13,7 +13,11 @@ export default function TravauxPage() {
         travaux={travaux}
         biens={biens}
         onAddTravaux={ajouterTravaux}
+        onUpdateTravaux={modifierTravaux}
+        onChangeStatutTravaux={changerStatutTravaux}
+        onDeleteTravaux={supprimerTravaux}
       />
     </div>
   );
 }
+

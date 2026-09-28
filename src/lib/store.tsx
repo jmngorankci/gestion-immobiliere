@@ -7,6 +7,7 @@ import {
   PaiementWithDetails,
   Profile,
   Proprietaire,
+  RepairStatus,
   TravauxReparation,
   UserRole,
 } from '@/types/database.types';
@@ -38,6 +39,7 @@ interface AppContextType {
     telephone: string;
     email?: string;
     role: UserRole;
+    avatar_url?: string;
     mot_de_passe?: string;
     code_pin?: string;
     bien_id?: string;
@@ -80,6 +82,9 @@ interface AppContextType {
   validerPaiement: (paiementId: string, notes?: string) => Promise<PaiementWithDetails>;
   rejeterPaiement: (paiementId: string, motif: string) => Promise<void>;
   ajouterTravaux: (nouveauxTravaux: Omit<TravauxReparation, 'id' | 'created_at'>) => Promise<TravauxReparation>;
+  modifierTravaux: (id: string, updates: Partial<TravauxReparation>) => Promise<TravauxReparation>;
+  changerStatutTravaux: (id: string, statut: RepairStatus) => Promise<void>;
+  supprimerTravaux: (id: string) => Promise<void>;
   enregistrerPaiementLocataire: (payload: {
     contratId: string;
     mois: number;
@@ -89,6 +94,28 @@ interface AppContextType {
     referenceTransaction: string;
     preuveUrl?: string;
   }) => Promise<PaiementWithDetails>;
+  ajouterEncaissementAdmin: (payload: {
+    contratId: string;
+    mois: number;
+    annee: number;
+    montant: number;
+    modePaiement: 'espece' | 'mobile_money' | 'virement';
+    referenceTransaction?: string;
+    statutDirect?: 'valide' | 'en_attente';
+    notes?: string;
+  }) => Promise<PaiementWithDetails>;
+  modifierEncaissement: (
+    paiementId: string,
+    payload: {
+      contratId?: string;
+      mois?: number;
+      annee?: number;
+      montant?: number;
+      modePaiement?: 'espece' | 'mobile_money' | 'virement';
+      referenceTransaction?: string;
+      notes?: string;
+    }
+  ) => Promise<PaiementWithDetails>;
   mettreAJourProfilLocataire: (profileId: string, nomComplet: string, avatarUrl: string) => Promise<void>;
   reinitialiserDonnees: () => void;
 }
@@ -202,11 +229,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     telephone: string;
     email?: string;
     role: UserRole;
+    avatar_url?: string;
     mot_de_passe?: string;
     code_pin?: string;
     bien_id?: string;
     loyer_mensuel?: number;
   }): Promise<Profile> => {
+    const defaultAvatars = [
+      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150',
+      'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150',
+      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    ];
+    const fallbackAvatar = defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+
     const newProfile: Profile = {
       id: `user-${Date.now()}`,
       nom_complet: payload.nom_complet,
@@ -216,7 +254,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       mot_de_passe: payload.mot_de_passe || (payload.role === 'locataire' ? null : 'pass123'),
       code_pin: payload.code_pin || (payload.role === 'locataire' ? '1234' : null),
       est_actif: true,
-      avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      avatar_url: payload.avatar_url?.trim() || fallbackAvatar,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -397,9 +435,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     contratId: string,
     payload: Partial<ContratBail>
   ): Promise<void> => {
+    const oldContrat = contrats.find((c) => c.id === contratId);
     setContrats((prev) =>
       prev.map((c) => (c.id === contratId ? { ...c, ...payload } : c))
     );
+    if (payload.bien_id && oldContrat && oldContrat.bien_id !== payload.bien_id) {
+      setBiens((prev) =>
+        prev.map((b) => {
+          if (b.id === oldContrat.bien_id) return { ...b, est_occupe: false };
+          if (b.id === payload.bien_id) return { ...b, est_occupe: true };
+          return b;
+        })
+      );
+    }
   };
 
   const resilierContrat = async (contratId: string): Promise<void> => {
@@ -480,10 +528,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const item: TravauxReparation = {
       ...nouveauxTravaux,
       id: `trav-${Date.now()}`,
+      statut: nouveauxTravaux.statut || 'en_attente',
       created_at: new Date().toISOString(),
     };
     setTravaux((prev) => [item, ...prev]);
     return item;
+  };
+
+  const modifierTravaux = async (
+    id: string,
+    updates: Partial<TravauxReparation>
+  ): Promise<TravauxReparation> => {
+    let updatedItem: TravauxReparation | null = null;
+    setTravaux((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          updatedItem = { ...t, ...updates };
+          return updatedItem;
+        }
+        return t;
+      })
+    );
+    if (!updatedItem) throw new Error('Réparation introuvable');
+    return updatedItem;
+  };
+
+  const changerStatutTravaux = async (id: string, statut: RepairStatus): Promise<void> => {
+    setTravaux((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, statut } : t))
+    );
+  };
+
+  const supprimerTravaux = async (id: string): Promise<void> => {
+    setTravaux((prev) => prev.filter((t) => t.id !== id));
   };
 
   const enregistrerPaiementLocataire = async (payload: {
@@ -544,6 +621,154 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setPaiements((prev) => [nouveauPaiement, ...prev]);
     return nouveauPaiement;
+  };
+
+  const ajouterEncaissementAdmin = async (payload: {
+    contratId: string;
+    mois: number;
+    annee: number;
+    montant: number;
+    modePaiement: 'espece' | 'mobile_money' | 'virement';
+    referenceTransaction?: string;
+    statutDirect?: 'valide' | 'en_attente';
+    notes?: string;
+  }): Promise<PaiementWithDetails> => {
+    const contrat = contrats.find((c) => c.id === payload.contratId) || contrats[0];
+    if (!contrat) throw new Error('Contrat introuvable');
+    const bien = biens.find((b) => b.id === contrat.bien_id) || MOCK_BIENS[0];
+    const proprietaire =
+      proprietaires.find((pr) => pr.id === bien.proprietaire_id) || MOCK_PROPRIETAIRES[0];
+    const locataire =
+      profiles.find((u) => u.id === contrat.locataire_profile_id) || MOCK_PROFILES[2];
+
+    const commission_cabinet = Math.round(payload.montant * 0.10);
+    const montant_reversable_proprietaire = payload.montant - commission_cabinet;
+
+    const reparationsImputees = travaux.filter(
+      (t) =>
+        t.bien_id === bien.id &&
+        t.imputation === 'impute_au_loyer' &&
+        t.loyer_impacte_mois === payload.mois &&
+        t.loyer_impacte_annee === payload.annee
+    );
+
+    const isValideDirect = payload.statutDirect !== 'en_attente';
+    const nowIso = new Date().toISOString();
+    let generatedReceiptNumber: string | null = null;
+    if (isValideDirect) {
+      const nextSeq = paiements.filter((p) => p.numero_recu).length + 43;
+      generatedReceiptNumber = formatReceiptNumber(payload.annee || 2026, nextSeq);
+    }
+
+    const nouveauPaiement: PaiementWithDetails = {
+      id: `pay-${Date.now()}`,
+      contrat_id: payload.contratId,
+      mois_concerne: payload.mois,
+      annee_concernee: payload.annee,
+      montant_total_paye: payload.montant,
+      commission_cabinet,
+      montant_reversable_proprietaire,
+      mode_paiement: payload.modePaiement,
+      statut: isValideDirect ? 'valide' : 'en_attente',
+      valide_par: isValideDirect ? (currentUser?.id || 'admin') : null,
+      date_validation: isValideDirect ? nowIso : null,
+      numero_recu: generatedReceiptNumber,
+      reference_transaction: payload.referenceTransaction || `ENC-${Date.now().toString().slice(-6)}`,
+      preuve_paiement_url: null,
+      notes: payload.notes || 'Encaissement direct saisi par l administration du cabinet.',
+      created_at: nowIso,
+      contrat: {
+        ...contrat,
+        bien: {
+          ...bien,
+          proprietaire,
+        },
+        locataire,
+      },
+      valideur: isValideDirect ? (currentUser || MOCK_PROFILES[0]) : null,
+      reparationsImputees,
+    };
+
+    setPaiements((prev) => [nouveauPaiement, ...prev]);
+    return nouveauPaiement;
+  };
+
+  const modifierEncaissement = async (
+    paiementId: string,
+    payload: {
+      contratId?: string;
+      mois?: number;
+      annee?: number;
+      montant?: number;
+      modePaiement?: 'espece' | 'mobile_money' | 'virement';
+      referenceTransaction?: string;
+      notes?: string;
+    }
+  ): Promise<PaiementWithDetails> => {
+    let updatedPayment: PaiementWithDetails | null = null;
+
+    setPaiements((prev) =>
+      prev.map((p) => {
+        if (p.id === paiementId) {
+          if (p.statut !== 'en_attente') {
+            throw new Error('Seuls les encaissements en attente peuvent être modifiés.');
+          }
+
+          const targetContratId = payload.contratId || p.contrat_id;
+          const contrat = contrats.find((c) => c.id === targetContratId) || p.contrat;
+          const bien = biens.find((b) => b.id === contrat.bien_id) || p.contrat.bien;
+          const proprietaire =
+            proprietaires.find((pr) => pr.id === bien.proprietaire_id) || p.contrat.bien.proprietaire;
+          const locataire =
+            profiles.find((u) => u.id === contrat.locataire_profile_id) || p.contrat.locataire;
+
+          const newMontant = payload.montant !== undefined ? payload.montant : p.montant_total_paye;
+          const commission_cabinet = Math.round(newMontant * 0.10);
+          const montant_reversable_proprietaire = newMontant - commission_cabinet;
+
+          const newMois = payload.mois !== undefined ? payload.mois : p.mois_concerne;
+          const newAnnee = payload.annee !== undefined ? payload.annee : p.annee_concernee;
+
+          const reparationsImputees = travaux.filter(
+            (t) =>
+              t.bien_id === bien.id &&
+              t.imputation === 'impute_au_loyer' &&
+              t.loyer_impacte_mois === newMois &&
+              t.loyer_impacte_annee === newAnnee
+          );
+
+          updatedPayment = {
+            ...p,
+            contrat_id: targetContratId,
+            mois_concerne: newMois,
+            annee_concernee: newAnnee,
+            montant_total_paye: newMontant,
+            commission_cabinet,
+            montant_reversable_proprietaire,
+            mode_paiement: payload.modePaiement || p.mode_paiement,
+            reference_transaction:
+              payload.referenceTransaction !== undefined
+                ? payload.referenceTransaction
+                : p.reference_transaction,
+            notes: payload.notes !== undefined ? payload.notes : p.notes,
+            contrat: {
+              ...contrat,
+              bien: {
+                ...bien,
+                proprietaire,
+              },
+              locataire,
+            },
+            reparationsImputees,
+          };
+          return updatedPayment;
+        }
+        return p;
+      })
+    );
+
+    if (!updatedPayment) throw new Error('Encaissement introuvable.');
+    return updatedPayment;
   };
 
   const mettreAJourProfilLocataire = async (
@@ -607,7 +832,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         validerPaiement,
         rejeterPaiement,
         ajouterTravaux,
+        modifierTravaux,
+        changerStatutTravaux,
+        supprimerTravaux,
         enregistrerPaiementLocataire,
+        ajouterEncaissementAdmin,
+        modifierEncaissement,
         mettreAJourProfilLocataire,
         reinitialiserDonnees,
       }}

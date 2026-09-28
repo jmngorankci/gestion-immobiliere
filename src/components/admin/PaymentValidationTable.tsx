@@ -16,8 +16,10 @@ import {
   Building,
   User,
   ArrowUpDown,
+  Edit,
 } from 'lucide-react';
 import { PaymentValidationModal } from './PaymentValidationModal';
+import { EditPaymentModal } from './EditPaymentModal';
 import { OfficialReceipt } from '@/components/receipt/OfficialReceipt';
 
 interface PaymentValidationTableProps {
@@ -34,6 +36,7 @@ export const PaymentValidationTable: React.FC<PaymentValidationTableProps> = ({
   const [selectedFilter, setSelectedFilter] = useState<string>('tous');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activePaymentForModal, setActivePaymentForModal] = useState<PaiementWithDetails | null>(null);
+  const [activePaymentForEdit, setActivePaymentForEdit] = useState<PaiementWithDetails | null>(null);
   const [activePaymentForReceipt, setActivePaymentForReceipt] = useState<PaiementWithDetails | null>(null);
 
   const filteredPaiements = paiements.filter((p) => {
@@ -233,15 +236,25 @@ export const PaymentValidationTable: React.FC<PaymentValidationTableProps> = ({
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end space-x-2">
+                      <div className="flex items-center justify-end space-x-1.5">
                         {p.statut === 'en_attente' ? (
-                          <button
-                            onClick={() => setActivePaymentForModal(p)}
-                            className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm transition active:scale-95"
-                          >
-                            <FileCheck2 className="w-3.5 h-3.5 mr-1" />
-                            Valider
-                          </button>
+                          <>
+                            <button
+                              onClick={() => setActivePaymentForEdit(p)}
+                              className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition active:scale-95"
+                              title="Modifier les détails de cet encaissement"
+                            >
+                              <Edit className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                              Modifier
+                            </button>
+                            <button
+                              onClick={() => setActivePaymentForModal(p)}
+                              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm transition active:scale-95"
+                            >
+                              <FileCheck2 className="w-3.5 h-3.5 mr-1" />
+                              Valider
+                            </button>
+                          </>
                         ) : p.statut === 'valide' ? (
                           <button
                             onClick={() => setActivePaymentForReceipt(p)}
@@ -268,6 +281,13 @@ export const PaymentValidationTable: React.FC<PaymentValidationTableProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Edit Payment Modal (Pending only) */}
+      <EditPaymentModal
+        paiement={activePaymentForEdit}
+        isOpen={!!activePaymentForEdit}
+        onClose={() => setActivePaymentForEdit(null)}
+      />
 
       {/* Validation / Control Modal */}
       {activePaymentForModal && (
