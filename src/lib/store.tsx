@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Bien,
   ContratBail,
@@ -20,6 +20,18 @@ import {
   MOCK_TRAVAUX,
 } from '@/lib/mock-data';
 import { formatReceiptNumber } from '@/lib/calculations';
+import { createClient } from '@/lib/supabase/client';
+
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 interface AppContextType {
   currentUser: Profile | null;
@@ -30,6 +42,9 @@ interface AppContextType {
   contrats: ContratBail[];
   paiements: PaiementWithDetails[];
   travaux: TravauxReparation[];
+  isSupabaseConnected: boolean;
+  isLoading: boolean;
+  rafraichirDonnees: () => Promise<void>;
 
   // Authentication & Access Assignment
   authentifierCabinet: (identifiant: string, motDePasse: string) => Promise<Profile>;
@@ -52,7 +67,7 @@ interface AppContextType {
   toggleStatutCompte: (profileId: string) => Promise<void>;
   supprimerAcces: (profileId: string) => Promise<void>;
   deconnexion: () => void;
-  
+
   // Bien CRUD
   ajouterBien: (bien: Omit<Bien, 'id' | 'created_at'>) => Promise<Bien>;
   modifierBien: (id: string, bien: Partial<Bien>) => Promise<Bien>;
@@ -133,9 +148,129 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [paiements, setPaiements] = useState<PaiementWithDetails[]>(MOCK_PAIEMENTS);
   const [travaux, setTravaux] = useState<TravauxReparation[]>(MOCK_TRAVAUX);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
 
-  // Load from localStorage
-  useEffect(() => {
+  const supabase = createClient();
+
+  // Helper to enrich paiements with details
+  const buildEnrichedPaiements = useCallback(
+    (
+      rawPaiements: any[],
+      currentContrats: ContratBail[],
+      currentBiens: Bien[],
+      currentProps: Proprietaire[],
+      currentProfiles: Profile[],
+      currentTravaux: TravauxReparation[]
+    ): PaiementWithDetails[] => {
+      return rawPaiements.map((p) => {
+        const contrat = currentContrats.find((c) => c.id === p.contrat_id) || currentContrats[0] || MOCK_CONTRATS[0];
+        const bien = currentBiens.find((b) => b.id === (contrat?.bien_id || p.bien_id)) || currentBiens[0] || MOCK_BIENS[0];
+        const proprietaire = currentProps.find((pr) => pr.id === bien?.proprietaire_id) || currentProps[0] || MOCK_PROPRIETAIRES[0];
+        const locataire = currentProfiles.find((u) => u.id === contrat?.locataire_profile_id) || currentProfiles[0] || MOCK_PROFILES[0];
+        const valideur = p.valide_par ? currentProfiles.find((u) => u.id === p.valide_par) || null : null;
+
+        const reparationsImputees = currentTravaux.filter(
+          (t) =>
+            t.bien_id === bien?.id &&
+            t.imputation === 'impute_au_loyer' &&
+            t.loyer_impacte_mois === p.mois_concerne &&
+            t.loyer_impacte_annee === p.annee_concernee
+        );
+
+        return {
+          ...p,
+          contrat: {
+            ...contrat,
+            bien: {
+              ...bien,
+              proprietaire,
+            },
+            locataire,
+          },
+          valideur,
+          reparationsImputees,
+        };
+      });
+    },
+    []
+  );
+
+  // Fetch live data from Supabase
+  const loadDataFromSupabase = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [
+        { data: supaProfiles, error: errProfiles },
+        { data: supaProps, error: errProps },
+        { data: supaBiens, error: errBiens },
+        { data: supaContrats, error: errContrats },
+        { data: supaPaiements, error: errPaiements },
+        { data: supaTravaux, error: errTravaux },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+        supabase.from('proprietaires').select('*').order('created_at', { ascending: false }),
+        supabase.from('biens').select('*').order('created_at', { ascending: false }),
+        supabase.from('contrats_bail').select('*').order('created_at', { ascending: false }),
+        supabase.from('paiements_loyer').select('*').order('created_at', { ascending: false }),
+        supabase.from('travaux_reparations').select('*').order('created_at', { ascending: false }),
+      ]);
+
+      if (errProfiles || errProps || errBiens) {
+        console.warn('Supabase fetch issue (tables may need schema setup or key is invalid):', {
+          errProfiles,
+          errProps,
+          errBiens,
+        });
+        setIsSupabaseConnected(false);
+        // Fallback to local storage
+        loadFromLocalStorage();
+        return;
+      }
+
+      setIsSupabaseConnected(true);
+
+      const loadedProfiles = (supaProfiles && supaProfiles.length > 0) ? (supaProfiles as Profile[]) : MOCK_PROFILES;
+      const loadedProps = (supaProps && supaProps.length > 0) ? (supaProps as Proprietaire[]) : MOCK_PROPRIETAIRES;
+      const loadedBiens = (supaBiens && supaBiens.length > 0) ? (supaBiens as Bien[]) : MOCK_BIENS;
+      const loadedContrats = (supaContrats && supaContrats.length > 0) ? (supaContrats as ContratBail[]) : MOCK_CONTRATS;
+      const loadedTravaux = (supaTravaux && supaTravaux.length > 0) ? (supaTravaux as TravauxReparation[]) : MOCK_TRAVAUX;
+
+      setProfiles(loadedProfiles);
+      setProprietaires(loadedProps);
+      setBiens(loadedBiens);
+      setContrats(loadedContrats);
+      setTravaux(loadedTravaux);
+
+      if (supaPaiements && supaPaiements.length > 0) {
+        const enriched = buildEnrichedPaiements(
+          supaPaiements,
+          loadedContrats,
+          loadedBiens,
+          loadedProps,
+          loadedProfiles,
+          loadedTravaux
+        );
+        setPaiements(enriched);
+      } else {
+        setPaiements(MOCK_PAIEMENTS);
+      }
+
+      // Keep current user in sync
+      if (!currentUser && loadedProfiles.length > 0) {
+        setCurrentUser(loadedProfiles[0]);
+      }
+    } catch (e) {
+      console.warn('Erreur lors du chargement Supabase:', e);
+      setIsSupabaseConnected(false);
+      loadFromLocalStorage();
+    } finally {
+      setIsLoading(false);
+      setIsLoaded(true);
+    }
+  }, [supabase, buildEnrichedPaiements, currentUser]);
+
+  const loadFromLocalStorage = () => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (saved) {
@@ -152,9 +287,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       console.warn('Storage load fallback:', e);
     }
     setIsLoaded(true);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadDataFromSupabase();
   }, []);
 
-  // Save to localStorage
+  // Save to localStorage as backup cache
   useEffect(() => {
     if (!isLoaded) return;
     try {
@@ -167,7 +307,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [profiles, currentUser, biens, proprietaires, contrats, paiements, travaux, isLoaded]);
 
-  // ===================== AUTHENTIFICATION ESPACE CABINET =====================
+  // ===================== AUTHENTIFICATION =====================
   const authentifierCabinet = async (identifiant: string, motDePasse: string): Promise<Profile> => {
     const cleanId = identifiant.trim().toLowerCase();
     const user = profiles.find(
@@ -181,7 +321,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!user.est_actif) {
-      throw new Error('Ce compte a été suspendu par l administrateur.');
+      throw new Error("Ce compte a été suspendu par l'administrateur.");
     }
 
     if (user.mot_de_passe && user.mot_de_passe !== motDePasse && motDePasse !== 'admin123' && motDePasse !== '123456') {
@@ -192,13 +332,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return user;
   };
 
-  // ===================== AUTHENTIFICATION ESPACE LOCATAIRE =====================
   const authentifierLocataire = async (telephone: string, codePinOuMdp: string): Promise<Profile> => {
     const cleanTel = telephone.replace(/\D/g, '');
     const user = profiles.find(
-      (p) =>
-        p.telephone.replace(/\D/g, '').includes(cleanTel) &&
-        p.role === 'locataire'
+      (p) => p.telephone.replace(/\D/g, '').includes(cleanTel) && p.role === 'locataire'
     );
 
     if (!user) {
@@ -223,7 +360,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return user;
   };
 
-  // ===================== ATTRIBUTION DES ACCÈS PAR L'ADMIN =====================
   const attribuerAccesUtilisateur = async (payload: {
     nom_complet: string;
     telephone: string;
@@ -244,9 +380,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     ];
     const fallbackAvatar = defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+    const newId = generateUUID();
 
     const newProfile: Profile = {
-      id: `user-${Date.now()}`,
+      id: newId,
       nom_complet: payload.nom_complet,
       telephone: payload.telephone.startsWith('+') ? payload.telephone : `+225${payload.telephone}`,
       email: payload.email || `${payload.telephone.replace(/\D/g, '')}@cabinet-immo.ci`,
@@ -259,13 +396,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updated_at: new Date().toISOString(),
     };
 
+    // Supabase persist
+    try {
+      await supabase.from('profiles').insert(newProfile);
+    } catch (err) {
+      console.warn('Supabase insert profile error:', err);
+    }
+
     setProfiles((prev) => [newProfile, ...prev]);
 
-    // If tenant and property chosen, create contract
     if (payload.role === 'locataire' && payload.bien_id) {
       const selectedBien = biens.find((b) => b.id === payload.bien_id);
+      const newContratId = generateUUID();
       const newContrat: ContratBail = {
-        id: `contrat-${Date.now()}`,
+        id: newContratId,
         bien_id: payload.bien_id,
         locataire_profile_id: newProfile.id,
         loyer_mensuel: payload.loyer_mensuel || selectedBien?.loyer_mensuel_reference || 350000,
@@ -276,10 +420,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         conditions_particulieres: 'Bail attribué par l administration du cabinet.',
         created_at: new Date().toISOString(),
       };
+
+      try {
+        await supabase.from('contrats_bail').insert(newContrat);
+        await supabase.from('biens').update({ est_occupe: true }).eq('id', payload.bien_id);
+      } catch (err) {
+        console.warn('Supabase lease insert error:', err);
+      }
+
       setContrats((prev) => [newContrat, ...prev]);
-      setBiens((prev) =>
-        prev.map((b) => (b.id === payload.bien_id ? { ...b, est_occupe: true } : b))
-      );
+      setBiens((prev) => prev.map((b) => (b.id === payload.bien_id ? { ...b, est_occupe: true } : b)));
     }
 
     return newProfile;
@@ -290,10 +440,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     updates: Partial<Profile> & { bien_id?: string; loyer_mensuel?: number }
   ): Promise<Profile> => {
     let updated: Profile | null = null;
+    const nowIso = new Date().toISOString();
+
+    try {
+      const { bien_id, loyer_mensuel, ...profileUpdates } = updates;
+      await supabase.from('profiles').update({ ...profileUpdates, updated_at: nowIso }).eq('id', id);
+    } catch (err) {
+      console.warn('Supabase update profile error:', err);
+    }
+
     setProfiles((prev) =>
       prev.map((p) => {
         if (p.id === id) {
-          updated = { ...p, ...updates, updated_at: new Date().toISOString() };
+          updated = { ...p, ...updates, updated_at: nowIso };
           return updated;
         }
         return p;
@@ -304,12 +463,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleStatutCompte = async (profileId: string): Promise<void> => {
+    const target = profiles.find((p) => p.id === profileId);
+    const newStatus = !target?.est_actif;
+    try {
+      await supabase.from('profiles').update({ est_actif: newStatus }).eq('id', profileId);
+    } catch (err) {
+      console.warn('Supabase toggle profile error:', err);
+    }
     setProfiles((prev) =>
-      prev.map((p) => (p.id === profileId ? { ...p, est_actif: !p.est_actif } : p))
+      prev.map((p) => (p.id === profileId ? { ...p, est_actif: newStatus } : p))
     );
   };
 
   const supprimerAcces = async (profileId: string): Promise<void> => {
+    try {
+      await supabase.from('profiles').delete().eq('id', profileId);
+    } catch (err) {
+      console.warn('Supabase delete profile error:', err);
+    }
     setProfiles((prev) => prev.filter((p) => p.id !== profileId));
   };
 
@@ -321,15 +492,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const ajouterBien = async (data: Omit<Bien, 'id' | 'created_at'>): Promise<Bien> => {
     const newBien: Bien = {
       ...data,
-      id: `bien-${Date.now()}`,
+      id: generateUUID(),
       created_at: new Date().toISOString(),
     };
+
+    try {
+      await supabase.from('biens').insert(newBien);
+    } catch (err) {
+      console.warn('Supabase insert bien error:', err);
+    }
+
     setBiens((prev) => [newBien, ...prev]);
     return newBien;
   };
 
   const modifierBien = async (id: string, updates: Partial<Bien>): Promise<Bien> => {
     let updated: Bien | null = null;
+    try {
+      await supabase.from('biens').update(updates).eq('id', id);
+    } catch (err) {
+      console.warn('Supabase update bien error:', err);
+    }
+
     setBiens((prev) =>
       prev.map((b) => {
         if (b.id === id) {
@@ -344,6 +528,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const supprimerBien = async (id: string): Promise<void> => {
+    try {
+      await supabase.from('biens').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Supabase delete bien error:', err);
+    }
     setBiens((prev) => prev.filter((b) => b.id !== id));
     setContrats((prev) => prev.filter((c) => c.bien_id !== id));
   };
@@ -354,9 +543,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ): Promise<Proprietaire> => {
     const newProp: Proprietaire = {
       ...data,
-      id: `prop-${Date.now()}`,
+      id: generateUUID(),
       created_at: new Date().toISOString(),
     };
+
+    try {
+      await supabase.from('proprietaires').insert(newProp);
+    } catch (err) {
+      console.warn('Supabase insert proprietaire error:', err);
+    }
+
     setProprietaires((prev) => [newProp, ...prev]);
     return newProp;
   };
@@ -366,6 +562,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     updates: Partial<Proprietaire>
   ): Promise<Proprietaire> => {
     let updated: Proprietaire | null = null;
+    try {
+      await supabase.from('proprietaires').update(updates).eq('id', id);
+    } catch (err) {
+      console.warn('Supabase update proprietaire error:', err);
+    }
+
     setProprietaires((prev) =>
       prev.map((p) => {
         if (p.id === id) {
@@ -380,6 +582,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const supprimerProprietaire = async (id: string): Promise<void> => {
+    try {
+      await supabase.from('proprietaires').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Supabase delete proprietaire error:', err);
+    }
     setProprietaires((prev) => prev.filter((p) => p.id !== id));
   };
 
@@ -397,7 +604,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let locataireProfile = profiles.find((p) => p.telephone === payload.telephone);
     if (!locataireProfile) {
       locataireProfile = {
-        id: `user-loc-${Date.now()}`,
+        id: generateUUID(),
         nom_complet: payload.nom_complet,
         telephone: payload.telephone,
         email: payload.email || `${payload.telephone.replace(/\D/g, '')}@locataire-ci.com`,
@@ -409,11 +616,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+      try {
+        await supabase.from('profiles').insert(locataireProfile);
+      } catch (err) {
+        console.warn('Supabase profile insert error:', err);
+      }
       setProfiles((prev) => [...prev, locataireProfile!]);
     }
 
     const newLease: ContratBail = {
-      id: `contrat-${Date.now()}`,
+      id: generateUUID(),
       bien_id: payload.bien_id,
       locataire_profile_id: locataireProfile.id,
       loyer_mensuel: payload.loyer_mensuel,
@@ -424,8 +636,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       conditions_particulieres: payload.conditions_particulieres || null,
       created_at: new Date().toISOString(),
     };
-    setContrats((prev) => [newLease, ...prev]);
 
+    try {
+      await supabase.from('contrats_bail').insert(newLease);
+      await supabase.from('biens').update({ est_occupe: true }).eq('id', payload.bien_id);
+    } catch (err) {
+      console.warn('Supabase lease insert error:', err);
+    }
+
+    setContrats((prev) => [newLease, ...prev]);
     setBiens((prev) =>
       prev.map((b) => (b.id === payload.bien_id ? { ...b, est_occupe: true } : b))
     );
@@ -436,10 +655,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     payload: Partial<ContratBail>
   ): Promise<void> => {
     const oldContrat = contrats.find((c) => c.id === contratId);
+    try {
+      await supabase.from('contrats_bail').update(payload).eq('id', contratId);
+    } catch (err) {
+      console.warn('Supabase update lease error:', err);
+    }
+
     setContrats((prev) =>
       prev.map((c) => (c.id === contratId ? { ...c, ...payload } : c))
     );
     if (payload.bien_id && oldContrat && oldContrat.bien_id !== payload.bien_id) {
+      try {
+        await supabase.from('biens').update({ est_occupe: false }).eq('id', oldContrat.bien_id);
+        await supabase.from('biens').update({ est_occupe: true }).eq('id', payload.bien_id);
+      } catch (e) {
+        console.warn('Supabase update property occupancy error:', e);
+      }
       setBiens((prev) =>
         prev.map((b) => {
           if (b.id === oldContrat.bien_id) return { ...b, est_occupe: false };
@@ -452,8 +683,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const resilierContrat = async (contratId: string): Promise<void> => {
     const contrat = contrats.find((c) => c.id === contratId);
+    const nowIsoDate = new Date().toISOString().split('T')[0];
+    try {
+      await supabase.from('contrats_bail').update({ statut: 'resilie', date_fin: nowIsoDate }).eq('id', contratId);
+      if (contrat) {
+        await supabase.from('biens').update({ est_occupe: false }).eq('id', contrat.bien_id);
+      }
+    } catch (err) {
+      console.warn('Supabase cancel lease error:', err);
+    }
+
     setContrats((prev) =>
-      prev.map((c) => (c.id === contratId ? { ...c, statut: 'resilie', date_fin: new Date().toISOString().split('T')[0] } : c))
+      prev.map((c) => (c.id === contratId ? { ...c, statut: 'resilie', date_fin: nowIsoDate } : c))
     );
     if (contrat) {
       setBiens((prev) =>
@@ -464,6 +705,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const supprimerContrat = async (contratId: string): Promise<void> => {
     const contrat = contrats.find((c) => c.id === contratId);
+    try {
+      await supabase.from('contrats_bail').delete().eq('id', contratId);
+      if (contrat) {
+        await supabase.from('biens').update({ est_occupe: false }).eq('id', contrat.bien_id);
+      }
+    } catch (err) {
+      console.warn('Supabase delete lease error:', err);
+    }
+
     setContrats((prev) => prev.filter((c) => c.id !== contratId));
     if (contrat) {
       setBiens((prev) =>
@@ -480,6 +730,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const nextSeq = paiements.filter((p) => p.numero_recu).length + 43;
     const generatedReceiptNumber = formatReceiptNumber(2026, nextSeq);
     const nowIso = new Date().toISOString();
+
+    const updates = {
+      statut: 'valide' as const,
+      valide_par: currentUser?.id || null,
+      date_validation: nowIso,
+      numero_recu: generatedReceiptNumber,
+      notes: notes || undefined,
+    };
+
+    try {
+      await supabase.from('paiements_loyer').update(updates).eq('id', paiementId);
+    } catch (err) {
+      console.warn('Supabase valider paiement error:', err);
+    }
 
     let updatedPaiement: PaiementWithDetails | null = null;
 
@@ -506,6 +770,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const rejeterPaiement = async (paiementId: string, motif: string): Promise<void> => {
+    const nowIso = new Date().toISOString();
+    try {
+      await supabase.from('paiements_loyer').update({
+        statut: 'rejete',
+        notes: `Motif de rejet: ${motif}`,
+        date_validation: nowIso,
+        valide_par: currentUser?.id || null,
+      }).eq('id', paiementId);
+    } catch (err) {
+      console.warn('Supabase reject payment error:', err);
+    }
+
     setPaiements((prev) =>
       prev.map((p) => {
         if (p.id === paiementId) {
@@ -513,7 +789,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ...p,
             statut: 'rejete',
             notes: `Motif de rejet: ${motif}`,
-            date_validation: new Date().toISOString(),
+            date_validation: nowIso,
             valide_par: currentUser?.id || 'admin',
           };
         }
@@ -527,10 +803,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ): Promise<TravauxReparation> => {
     const item: TravauxReparation = {
       ...nouveauxTravaux,
-      id: `trav-${Date.now()}`,
+      id: generateUUID(),
       statut: nouveauxTravaux.statut || 'en_attente',
       created_at: new Date().toISOString(),
     };
+
+    try {
+      await supabase.from('travaux_reparations').insert(item);
+    } catch (err) {
+      console.warn('Supabase add travaux error:', err);
+    }
+
     setTravaux((prev) => [item, ...prev]);
     return item;
   };
@@ -540,6 +823,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     updates: Partial<TravauxReparation>
   ): Promise<TravauxReparation> => {
     let updatedItem: TravauxReparation | null = null;
+    try {
+      await supabase.from('travaux_reparations').update(updates).eq('id', id);
+    } catch (err) {
+      console.warn('Supabase update travaux error:', err);
+    }
+
     setTravaux((prev) =>
       prev.map((t) => {
         if (t.id === id) {
@@ -554,12 +843,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changerStatutTravaux = async (id: string, statut: RepairStatus): Promise<void> => {
+    try {
+      await supabase.from('travaux_reparations').update({ statut }).eq('id', id);
+    } catch (err) {
+      console.warn('Supabase change statut travaux error:', err);
+    }
+
     setTravaux((prev) =>
       prev.map((t) => (t.id === id ? { ...t, statut } : t))
     );
   };
 
   const supprimerTravaux = async (id: string): Promise<void> => {
+    try {
+      await supabase.from('travaux_reparations').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Supabase delete travaux error:', err);
+    }
     setTravaux((prev) => prev.filter((t) => t.id !== id));
   };
 
@@ -590,8 +890,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         t.loyer_impacte_annee === payload.annee
     );
 
-    const nouveauPaiement: PaiementWithDetails = {
-      id: `pay-${Date.now()}`,
+    const newId = generateUUID();
+    const nowIso = new Date().toISOString();
+
+    const dbPayload = {
+      id: newId,
       contrat_id: payload.contratId,
       mois_concerne: payload.mois,
       annee_concernee: payload.annee,
@@ -599,14 +902,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       commission_cabinet,
       montant_reversable_proprietaire,
       mode_paiement: payload.modePaiement,
-      statut: 'en_attente',
-      valide_par: null,
-      date_validation: null,
-      numero_recu: null,
+      statut: 'en_attente' as const,
       reference_transaction: payload.referenceTransaction,
       preuve_paiement_url: payload.preuveUrl || null,
       notes: 'Paiement déclaré par le locataire depuis le portail mobile.',
-      created_at: new Date().toISOString(),
+      created_at: nowIso,
+    };
+
+    try {
+      await supabase.from('paiements_loyer').insert(dbPayload);
+    } catch (err) {
+      console.warn('Supabase tenant payment insert error:', err);
+    }
+
+    const nouveauPaiement: PaiementWithDetails = {
+      ...dbPayload,
+      valide_par: null,
+      date_validation: null,
+      numero_recu: null,
       contrat: {
         ...contrat,
         bien: {
@@ -660,8 +973,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       generatedReceiptNumber = formatReceiptNumber(payload.annee || 2026, nextSeq);
     }
 
-    const nouveauPaiement: PaiementWithDetails = {
-      id: `pay-${Date.now()}`,
+    const newId = generateUUID();
+    const dbPayload = {
+      id: newId,
       contrat_id: payload.contratId,
       mois_concerne: payload.mois,
       annee_concernee: payload.annee,
@@ -669,14 +983,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       commission_cabinet,
       montant_reversable_proprietaire,
       mode_paiement: payload.modePaiement,
-      statut: isValideDirect ? 'valide' : 'en_attente',
-      valide_par: isValideDirect ? (currentUser?.id || 'admin') : null,
+      statut: isValideDirect ? ('valide' as const) : ('en_attente' as const),
+      valide_par: isValideDirect ? currentUser?.id || null : null,
       date_validation: isValideDirect ? nowIso : null,
       numero_recu: generatedReceiptNumber,
       reference_transaction: payload.referenceTransaction || `ENC-${Date.now().toString().slice(-6)}`,
       preuve_paiement_url: null,
       notes: payload.notes || 'Encaissement direct saisi par l administration du cabinet.',
       created_at: nowIso,
+    };
+
+    try {
+      await supabase.from('paiements_loyer').insert(dbPayload);
+    } catch (err) {
+      console.warn('Supabase admin encaissement insert error:', err);
+    }
+
+    const nouveauPaiement: PaiementWithDetails = {
+      ...dbPayload,
       contrat: {
         ...contrat,
         bien: {
@@ -707,6 +1031,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ): Promise<PaiementWithDetails> => {
     let updatedPayment: PaiementWithDetails | null = null;
 
+    const targetContratId = payload.contratId;
+    const updatesForDb: any = {};
+    if (payload.contratId) updatesForDb.contrat_id = payload.contratId;
+    if (payload.mois) updatesForDb.mois_concerne = payload.mois;
+    if (payload.annee) updatesForDb.annee_concernee = payload.annee;
+    if (payload.montant !== undefined) {
+      updatesForDb.montant_total_paye = payload.montant;
+      updatesForDb.commission_cabinet = Math.round(payload.montant * 0.10);
+      updatesForDb.montant_reversable_proprietaire = payload.montant - updatesForDb.commission_cabinet;
+    }
+    if (payload.modePaiement) updatesForDb.mode_paiement = payload.modePaiement;
+    if (payload.referenceTransaction !== undefined) updatesForDb.reference_transaction = payload.referenceTransaction;
+    if (payload.notes !== undefined) updatesForDb.notes = payload.notes;
+
+    try {
+      await supabase.from('paiements_loyer').update(updatesForDb).eq('id', paiementId);
+    } catch (err) {
+      console.warn('Supabase update encaissement error:', err);
+    }
+
     setPaiements((prev) =>
       prev.map((p) => {
         if (p.id === paiementId) {
@@ -714,8 +1058,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             throw new Error('Seuls les encaissements en attente peuvent être modifiés.');
           }
 
-          const targetContratId = payload.contratId || p.contrat_id;
-          const contrat = contrats.find((c) => c.id === targetContratId) || p.contrat;
+          const resolvedContratId = targetContratId || p.contrat_id;
+          const contrat = contrats.find((c) => c.id === resolvedContratId) || p.contrat;
           const bien = biens.find((b) => b.id === contrat.bien_id) || p.contrat.bien;
           const proprietaire =
             proprietaires.find((pr) => pr.id === bien.proprietaire_id) || p.contrat.bien.proprietaire;
@@ -739,7 +1083,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
           updatedPayment = {
             ...p,
-            contrat_id: targetContratId,
+            contrat_id: resolvedContratId,
             mois_concerne: newMois,
             annee_concernee: newAnnee,
             montant_total_paye: newMontant,
@@ -776,6 +1120,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     nomComplet: string,
     avatarUrl: string
   ): Promise<void> => {
+    try {
+      await supabase.from('profiles').update({ nom_complet: nomComplet, avatar_url: avatarUrl }).eq('id', profileId);
+    } catch (err) {
+      console.warn('Supabase update locataire profile error:', err);
+    }
+
     setProfiles((prev) =>
       prev.map((p) =>
         p.id === profileId ? { ...p, nom_complet: nomComplet, avatar_url: avatarUrl } : p
@@ -812,6 +1162,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         contrats,
         paiements,
         travaux,
+        isSupabaseConnected,
+        isLoading,
+        rafraichirDonnees: loadDataFromSupabase,
         authentifierCabinet,
         authentifierLocataire,
         attribuerAccesUtilisateur,

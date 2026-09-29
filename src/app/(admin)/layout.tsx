@@ -25,8 +25,26 @@ import {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, paiements, profiles, contrats, travaux, deconnexion, reinitialiserDonnees } = useAppStore();
+  const {
+    currentUser,
+    paiements,
+    profiles,
+    contrats,
+    travaux,
+    deconnexion,
+    reinitialiserDonnees,
+    isSupabaseConnected,
+    rafraichirDonnees,
+    isLoading,
+  } = useAppStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await rafraichirDonnees();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   const pendingCount = paiements.filter((p) => p.statut === 'en_attente').length;
   const pendingRepairsCount = travaux.filter((t) => (t.statut || 'en_attente') === 'en_attente').length;
@@ -74,6 +92,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       label: 'Bordereaux & Reversements',
       href: '/reversements',
       icon: Wallet,
+    },
+    {
+      label: 'Rapports & Documents',
+      href: '/rapports',
+      icon: FileSpreadsheet,
+      badge: unpaidRentCount > 0 ? `${unpaidRentCount} retard` : null,
     },
     {
       label: 'Gestion des Alertes',
@@ -178,6 +202,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               title="Déconnexion"
             >
               <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Supabase Sync Badge */}
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-900/50 rounded-lg border border-slate-800 text-[11px]">
+            <div className="flex items-center space-x-2">
+              <span className={`w-2 h-2 rounded-full ${isSupabaseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className="font-medium text-slate-300">
+                {isSupabaseConnected ? 'Supabase Connecté' : 'Mode Local / Cache'}
+              </span>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className={`p-1 text-slate-400 hover:text-emerald-400 rounded transition ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`}
+              title="Synchroniser avec Supabase"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
 
