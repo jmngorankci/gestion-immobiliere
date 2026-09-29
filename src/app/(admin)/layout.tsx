@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Clock,
   RefreshCw,
+  BarChart3,
   Users,
 } from 'lucide-react';
 
@@ -98,6 +99,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       href: '/rapports',
       icon: FileSpreadsheet,
       badge: unpaidRentCount > 0 ? `${unpaidRentCount} retard` : null,
+    },
+    {
+      label: 'Statistiques & Analyses',
+      href: '/statistiques',
+      icon: BarChart3,
     },
     {
       label: 'Gestion des Alertes',
