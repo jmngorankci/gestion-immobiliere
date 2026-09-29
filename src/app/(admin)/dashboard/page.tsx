@@ -16,6 +16,7 @@ import {
   TrendingUp,
   CreditCard,
   Wrench,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { PaymentValidationTable } from '@/components/admin/PaymentValidationTable';
 
@@ -58,6 +59,13 @@ export default function AdminDashboardPage() {
           >
             <CreditCard className="w-4 h-4 mr-2" />
             Traiter les {pendingPayments.length} paiements en attente
+          </Link>
+          <Link
+            href="/rapports"
+            className="inline-flex items-center px-4 py-2.5 rounded-xl bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 font-bold text-xs border border-emerald-700/60 shadow-lg shadow-emerald-950/40 transition active:scale-95"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-400" />
+            Rapports & Documents
           </Link>
           <Link
             href="/reversements"
