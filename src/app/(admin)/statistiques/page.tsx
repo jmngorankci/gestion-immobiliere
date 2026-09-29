@@ -320,8 +320,8 @@ export default function StatistiquesPage() {
               <span className="font-semibold text-slate-700">Loyers Encaissés</span>
             </div>
             <div className="flex items-center space-x-1.5">
-              <span className="w-3 h-3 rounded-full bg-teal-500" />
-              <span className="font-semibold text-slate-700">Commissions (10%)</span>
+              <span className="w-3 h-3 rounded-full bg-rose-500" />
+              <span className="font-semibold text-rose-600 font-bold">Commissions Cabinet (10% - Rouge)</span>
             </div>
           </div>
         </div>
@@ -333,8 +333,8 @@ export default function StatistiquesPage() {
             <p className="text-xl font-mono font-black text-emerald-700">{formatFCFA(totalEncaisseAnnee)}</p>
           </div>
           <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase">Commissions Net ({selectedYear})</p>
-            <p className="text-xl font-mono font-black text-teal-700">{formatFCFA(totalCommissionsAnnee)}</p>
+            <p className="text-[11px] font-bold text-rose-800 uppercase">Commissions Net (Rouge)</p>
+            <p className="text-xl font-mono font-black text-rose-600">{formatFCFA(totalCommissionsAnnee)}</p>
           </div>
           <div>
             <p className="text-[11px] font-bold text-slate-500 uppercase">Quittances Émises</p>
@@ -344,31 +344,43 @@ export default function StatistiquesPage() {
           </div>
         </div>
 
-        {/* Graphique à barres visuel */}
+        {/* Graphique à barres visuel avec Commission en Rouge */}
         <div className="pt-4">
-          <div className="h-64 flex items-end justify-between gap-2 sm:gap-4 px-2 border-b border-slate-200">
+          <div className="h-64 flex items-end justify-between gap-1.5 sm:gap-3 px-2 border-b border-slate-200">
             {monthlyData.map((m) => {
-              const heightPercent = maxMonthlyAmount > 0 ? Math.round((m.totalMontant / maxMonthlyAmount) * 100) : 0;
+              const heightPercentTotal = maxMonthlyAmount > 0 ? Math.round((m.totalMontant / maxMonthlyAmount) * 100) : 0;
+              const heightPercentCom = maxMonthlyAmount > 0 ? Math.round((m.commission / maxMonthlyAmount) * 100) : 0;
               const hasData = m.totalMontant > 0;
 
               return (
                 <div key={m.moisNum} className="flex-1 flex flex-col items-center h-full justify-end group relative">
                   {/* Tooltip on Hover */}
-                  <div className="absolute -top-16 opacity-0 group-hover:opacity-100 transition duration-200 pointer-events-none z-20 bg-slate-950 text-white p-2 rounded-xl text-[11px] shadow-xl whitespace-nowrap text-center">
+                  <div className="absolute -top-20 opacity-0 group-hover:opacity-100 transition duration-200 pointer-events-none z-20 bg-slate-950 text-white p-2.5 rounded-xl text-[11px] shadow-xl whitespace-nowrap text-center space-y-0.5 border border-slate-800">
                     <p className="font-bold">{m.moisComplet} {selectedYear}</p>
-                    <p className="font-mono text-emerald-400 font-bold">{formatFCFA(m.totalMontant)}</p>
-                    <p className="text-[10px] text-slate-400">Com. 10%: {formatFCFA(m.commission)}</p>
+                    <p className="font-mono text-emerald-400 font-bold">Total : {formatFCFA(m.totalMontant)}</p>
+                    <p className="font-mono text-rose-400 font-bold">Commission (10%) : {formatFCFA(m.commission)}</p>
+                    <p className="font-mono text-slate-300 text-[10px]">Bailleur (90%) : {formatFCFA(m.reversement)}</p>
                   </div>
 
-                  {/* Bar */}
-                  <div className="w-full max-w-[42px] flex flex-col justify-end items-center h-full">
+                  {/* Dual Bars (Loyers vs Commission Rouge) */}
+                  <div className="w-full flex items-end justify-center space-x-1 h-full">
                     {hasData ? (
-                      <div
-                        className="w-full bg-gradient-to-t from-emerald-600 to-teal-400 rounded-t-xl hover:brightness-110 transition shadow-sm"
-                        style={{ height: `${Math.max(12, heightPercent)}%` }}
-                      />
+                      <>
+                        {/* Barre Verte : Loyer Encaissé */}
+                        <div
+                          className="w-1/2 max-w-[20px] bg-gradient-to-t from-emerald-600 to-teal-400 rounded-t-md hover:brightness-110 transition shadow-sm"
+                          style={{ height: `${Math.max(12, heightPercentTotal)}%` }}
+                          title={`Total: ${formatFCFA(m.totalMontant)}`}
+                        />
+                        {/* Barre Rouge : Commission 10% */}
+                        <div
+                          className="w-1/2 max-w-[20px] bg-gradient-to-t from-rose-600 to-rose-400 rounded-t-md hover:brightness-110 transition shadow-sm"
+                          style={{ height: `${Math.max(8, heightPercentCom * 4)}%` }}
+                          title={`Commission: ${formatFCFA(m.commission)}`}
+                        />
+                      </>
                     ) : (
-                      <div className="w-full bg-slate-100 rounded-t-lg h-2" />
+                      <div className="w-full max-w-[28px] bg-slate-100 rounded-t-lg h-2" />
                     )}
                   </div>
 
