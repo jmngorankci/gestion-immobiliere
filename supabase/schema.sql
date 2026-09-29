@@ -141,11 +141,28 @@ ALTER TABLE public.biens ADD COLUMN IF NOT EXISTS photos_urls TEXT[];
 ALTER TABLE public.paiements_loyer ADD COLUMN IF NOT EXISTS preuve_paiement_url TEXT;
 ALTER TABLE public.paiements_loyer ADD COLUMN IF NOT EXISTS reference_transaction VARCHAR(100);
 
--- 5. TRIGGER COMMISSION (10% CABINET / 90% PROPRIETAIRE)
+-- 5. TRIGGER COMMISSION DYNAMIQUE SELON LE TAUX DU CONTRAT DE BAIL
 CREATE OR REPLACE FUNCTION calculate_commission_split_trigger()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_taux NUMERIC(5, 2) := 10.00;
 BEGIN
-    NEW.commission_cabinet := ROUND(NEW.montant_total_paye * 0.10);
+    -- Récupérer le taux de commission défini sur le contrat de bail concerné
+    IF NEW.contrat_id IS NOT NULL THEN
+        SELECT COALESCE(taux_commission, 10.00) INTO v_taux
+        FROM public.contrats_bail
+        WHERE id = NEW.contrat_id;
+
+        IF v_taux IS NULL THEN
+            v_taux := 10.00;
+        END IF;
+    END IF;
+
+    -- Si commission_cabinet n'a pas été fournie ou lors d'un changement de montant
+    IF NEW.commission_cabinet IS NULL OR (TG_OP = 'UPDATE' AND NEW.montant_total_paye <> OLD.montant_total_paye) THEN
+        NEW.commission_cabinet := ROUND(NEW.montant_total_paye * (v_taux / 100.0));
+    END IF;
+
     NEW.montant_reversable_proprietaire := NEW.montant_total_paye - NEW.commission_cabinet;
     RETURN NEW;
 END;
