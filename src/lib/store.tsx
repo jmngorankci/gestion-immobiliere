@@ -33,6 +33,11 @@ function generateUUID(): string {
   });
 }
 
+function isValidUUID(val?: string | null): boolean {
+  if (!val || typeof val !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+}
+
 interface AppContextType {
   currentUser: Profile | null;
   setCurrentUser: (user: Profile | null) => void;
@@ -776,19 +781,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const nextSeq = paiements.filter((p) => p.numero_recu).length + 43;
     const generatedReceiptNumber = formatReceiptNumber(2026, nextSeq);
     const nowIso = new Date().toISOString();
+    const existingPaiement = paiements.find((p) => p.id === paiementId);
+
+    const validatorId = isValidUUID(currentUser?.id) ? currentUser!.id : null;
 
     const updates = {
       statut: 'valide' as const,
-      valide_par: currentUser?.id || null,
+      valide_par: validatorId,
       date_validation: nowIso,
       numero_recu: generatedReceiptNumber,
-      notes: notes || undefined,
+      notes: notes || existingPaiement?.notes || 'Validé par le cabinet',
     };
 
     try {
-      await supabase.from('paiements_loyer').update(updates).eq('id', paiementId);
+      const { data, error } = await supabase
+        .from('paiements_loyer')
+        .update(updates)
+        .eq('id', paiementId)
+        .select();
+
+      if (error) {
+        console.warn('Supabase valider paiement update error, trying with valide_par null:', error);
+        await supabase
+          .from('paiements_loyer')
+          .update({ ...updates, valide_par: null })
+          .eq('id', paiementId);
+      } else if ((!data || data.length === 0) && existingPaiement) {
+        // If row was not found in Supabase (e.g. mock item), insert/upsert it directly
+        const fullPayload = {
+          id: isValidUUID(existingPaiement.id) ? existingPaiement.id : generateUUID(),
+          contrat_id: existingPaiement.contrat_id,
+          mois_concerne: existingPaiement.mois_concerne,
+          annee_concernee: existingPaiement.annee_concernee,
+          montant_total_paye: existingPaiement.montant_total_paye,
+          commission_cabinet: existingPaiement.commission_cabinet,
+          montant_reversable_proprietaire: existingPaiement.montant_reversable_proprietaire,
+          mode_paiement: existingPaiement.mode_paiement,
+          statut: 'valide' as const,
+          valide_par: validatorId,
+          date_validation: nowIso,
+          numero_recu: generatedReceiptNumber,
+          reference_transaction: existingPaiement.reference_transaction || `VAL-${Date.now().toString().slice(-6)}`,
+          preuve_paiement_url: existingPaiement.preuve_paiement_url || null,
+          notes: notes || existingPaiement.notes || 'Validé par le cabinet',
+          created_at: existingPaiement.created_at || nowIso,
+        };
+        const { error: upsertErr } = await supabase.from('paiements_loyer').upsert(fullPayload);
+        if (upsertErr) {
+          console.warn('Supabase upsert paiement error, trying with valide_par null:', upsertErr);
+          await supabase.from('paiements_loyer').upsert({ ...fullPayload, valide_par: null });
+        }
+      }
     } catch (err) {
-      console.warn('Supabase valider paiement error:', err);
+      console.warn('Supabase valider paiement catch error:', err);
     }
 
     let updatedPaiement: PaiementWithDetails | null = null;
@@ -799,7 +844,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           updatedPaiement = {
             ...p,
             statut: 'valide',
-            valide_par: currentUser?.id || 'admin',
+            valide_par: validatorId || 'admin',
             valideur: currentUser || MOCK_PROFILES[0],
             date_validation: nowIso,
             numero_recu: generatedReceiptNumber,
@@ -811,19 +856,73 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       })
     );
 
-    if (!updatedPaiement) throw new Error('Paiement introuvable');
+    if (!updatedPaiement) {
+      if (existingPaiement) {
+        updatedPaiement = {
+          ...existingPaiement,
+          statut: 'valide',
+          valide_par: validatorId || 'admin',
+          valideur: currentUser || MOCK_PROFILES[0],
+          date_validation: nowIso,
+          numero_recu: generatedReceiptNumber,
+          notes: notes || existingPaiement.notes,
+        };
+      } else {
+        throw new Error('Paiement introuvable');
+      }
+    }
     return updatedPaiement;
   };
 
   const rejeterPaiement = async (paiementId: string, motif: string): Promise<void> => {
     const nowIso = new Date().toISOString();
+    const validatorId = isValidUUID(currentUser?.id) ? currentUser!.id : null;
+    const existingPaiement = paiements.find((p) => p.id === paiementId);
+
+    const updates = {
+      statut: 'rejete' as const,
+      notes: `Motif de rejet: ${motif}`,
+      date_validation: nowIso,
+      valide_par: validatorId,
+    };
+
     try {
-      await supabase.from('paiements_loyer').update({
-        statut: 'rejete',
-        notes: `Motif de rejet: ${motif}`,
-        date_validation: nowIso,
-        valide_par: currentUser?.id || null,
-      }).eq('id', paiementId);
+      const { data, error } = await supabase
+        .from('paiements_loyer')
+        .update(updates)
+        .eq('id', paiementId)
+        .select();
+
+      if (error) {
+        console.warn('Supabase reject payment error, retrying without validator:', error);
+        await supabase
+          .from('paiements_loyer')
+          .update({ ...updates, valide_par: null })
+          .eq('id', paiementId);
+      } else if ((!data || data.length === 0) && existingPaiement) {
+        const fullPayload = {
+          id: isValidUUID(existingPaiement.id) ? existingPaiement.id : generateUUID(),
+          contrat_id: existingPaiement.contrat_id,
+          mois_concerne: existingPaiement.mois_concerne,
+          annee_concernee: existingPaiement.annee_concernee,
+          montant_total_paye: existingPaiement.montant_total_paye,
+          commission_cabinet: existingPaiement.commission_cabinet,
+          montant_reversable_proprietaire: existingPaiement.montant_reversable_proprietaire,
+          mode_paiement: existingPaiement.mode_paiement,
+          statut: 'rejete' as const,
+          valide_par: validatorId,
+          date_validation: nowIso,
+          numero_recu: null,
+          reference_transaction: existingPaiement.reference_transaction || `REJ-${Date.now().toString().slice(-6)}`,
+          preuve_paiement_url: existingPaiement.preuve_paiement_url || null,
+          notes: `Motif de rejet: ${motif}`,
+          created_at: existingPaiement.created_at || nowIso,
+        };
+        const { error: upsertErr } = await supabase.from('paiements_loyer').upsert(fullPayload);
+        if (upsertErr) {
+          await supabase.from('paiements_loyer').upsert({ ...fullPayload, valide_par: null });
+        }
+      }
     } catch (err) {
       console.warn('Supabase reject payment error:', err);
     }
@@ -836,7 +935,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             statut: 'rejete',
             notes: `Motif de rejet: ${motif}`,
             date_validation: nowIso,
-            valide_par: currentUser?.id || 'admin',
+            valide_par: validatorId || 'admin',
           };
         }
         return p;
@@ -1021,6 +1120,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       generatedReceiptNumber = formatReceiptNumber(payload.annee || 2026, nextSeq);
     }
 
+    const validatorId = (isValideDirect && isValidUUID(currentUser?.id)) ? currentUser!.id : null;
     const newId = generateUUID();
     const dbPayload = {
       id: newId,
@@ -1032,7 +1132,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       montant_reversable_proprietaire,
       mode_paiement: payload.modePaiement,
       statut: isValideDirect ? ('valide' as const) : ('en_attente' as const),
-      valide_par: isValideDirect ? currentUser?.id || null : null,
+      valide_par: validatorId,
       date_validation: isValideDirect ? nowIso : null,
       numero_recu: generatedReceiptNumber,
       reference_transaction: payload.referenceTransaction || `ENC-${Date.now().toString().slice(-6)}`,
@@ -1042,7 +1142,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     try {
-      await supabase.from('paiements_loyer').insert(dbPayload);
+      const { error } = await supabase.from('paiements_loyer').insert(dbPayload);
+      if (error) {
+        console.warn('Supabase admin encaissement insert error, retrying with valide_par null:', error);
+        await supabase.from('paiements_loyer').insert({ ...dbPayload, valide_par: null });
+      }
     } catch (err) {
       console.warn('Supabase admin encaissement insert error:', err);
     }
