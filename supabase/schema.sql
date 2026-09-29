@@ -82,12 +82,15 @@ CREATE TABLE IF NOT EXISTS public.contrats_bail (
     locataire_profile_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
     loyer_mensuel NUMERIC(12, 2) NOT NULL,
     depot_garantie NUMERIC(12, 2) NOT NULL,
+    taux_commission NUMERIC(5, 2) DEFAULT 10.00 NOT NULL,
     date_debut DATE NOT NULL,
     date_fin DATE,
     statut lease_status DEFAULT 'actif' NOT NULL,
     conditions_particulieres TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.contrats_bail ADD COLUMN IF NOT EXISTS taux_commission NUMERIC(5, 2) DEFAULT 10.00 NOT NULL;
 
 CREATE TABLE IF NOT EXISTS public.paiements_loyer (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

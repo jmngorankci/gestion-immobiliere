@@ -203,7 +203,7 @@ export const PaymentValidationTable: React.FC<PaymentValidationTableProps> = ({
                         {formatFCFA(p.montant_total_paye)}
                       </span>
                       <p className="text-[10px] text-slate-500">
-                        Com. 10%: <span className="font-mono font-semibold">{formatFCFA(p.commission_cabinet)}</span>
+                        Com. {typeof p.contrat?.taux_commission === 'number' ? p.contrat.taux_commission : (p.montant_total_paye > 0 && p.commission_cabinet ? Math.round((p.commission_cabinet / p.montant_total_paye) * 100) : 10)}%: <span className="font-mono font-semibold">{formatFCFA(p.commission_cabinet)}</span>
                       </p>
                     </td>
 

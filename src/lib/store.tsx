@@ -59,6 +59,7 @@ interface AppContextType {
     code_pin?: string;
     bien_id?: string;
     loyer_mensuel?: number;
+    taux_commission?: number;
   }) => Promise<Profile>;
   modifierAccesUtilisateur: (
     id: string,
@@ -86,6 +87,7 @@ interface AppContextType {
     bien_id: string;
     loyer_mensuel: number;
     depot_garantie: number;
+    taux_commission?: number;
     date_debut: string;
     conditions_particulieres?: string;
   }) => Promise<void>;
@@ -414,6 +416,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         locataire_profile_id: newProfile.id,
         loyer_mensuel: payload.loyer_mensuel || selectedBien?.loyer_mensuel_reference || 350000,
         depot_garantie: (payload.loyer_mensuel || selectedBien?.loyer_mensuel_reference || 350000) * 2,
+        taux_commission: typeof payload.taux_commission === 'number' ? payload.taux_commission : 10,
         date_debut: new Date().toISOString().split('T')[0],
         date_fin: null,
         statut: 'actif',
@@ -630,6 +633,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       locataire_profile_id: locataireProfile.id,
       loyer_mensuel: payload.loyer_mensuel,
       depot_garantie: payload.depot_garantie,
+      taux_commission: typeof payload.taux_commission === 'number' ? payload.taux_commission : 10,
       date_debut: payload.date_debut,
       date_fin: null,
       statut: 'actif',
@@ -879,7 +883,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const locataire =
       profiles.find((u) => u.id === contrat.locataire_profile_id) || MOCK_PROFILES[2];
 
-    const commission_cabinet = Math.round(payload.montant * 0.10);
+    const rate = typeof contrat?.taux_commission === 'number' ? contrat.taux_commission : 10;
+    const commission_cabinet = Math.round(payload.montant * (rate / 100));
     const montant_reversable_proprietaire = payload.montant - commission_cabinet;
 
     const reparationsImputees = travaux.filter(
@@ -954,7 +959,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const locataire =
       profiles.find((u) => u.id === contrat.locataire_profile_id) || MOCK_PROFILES[2];
 
-    const commission_cabinet = Math.round(payload.montant * 0.10);
+    const rate = typeof contrat?.taux_commission === 'number' ? contrat.taux_commission : 10;
+    const commission_cabinet = Math.round(payload.montant * (rate / 100));
     const montant_reversable_proprietaire = payload.montant - commission_cabinet;
 
     const reparationsImputees = travaux.filter(
@@ -1032,13 +1038,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let updatedPayment: PaiementWithDetails | null = null;
 
     const targetContratId = payload.contratId;
+    const existingPayment = paiements.find((p) => p.id === paiementId);
+    const resolvedContratId = targetContratId || existingPayment?.contrat_id;
+    const resolvedContrat = contrats.find((c) => c.id === resolvedContratId) || existingPayment?.contrat;
+    const rate = typeof resolvedContrat?.taux_commission === 'number' ? resolvedContrat.taux_commission : 10;
+
     const updatesForDb: any = {};
     if (payload.contratId) updatesForDb.contrat_id = payload.contratId;
     if (payload.mois) updatesForDb.mois_concerne = payload.mois;
     if (payload.annee) updatesForDb.annee_concernee = payload.annee;
     if (payload.montant !== undefined) {
       updatesForDb.montant_total_paye = payload.montant;
-      updatesForDb.commission_cabinet = Math.round(payload.montant * 0.10);
+      updatesForDb.commission_cabinet = Math.round(payload.montant * (rate / 100));
       updatesForDb.montant_reversable_proprietaire = payload.montant - updatesForDb.commission_cabinet;
     }
     if (payload.modePaiement) updatesForDb.mode_paiement = payload.modePaiement;
@@ -1058,16 +1069,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             throw new Error('Seuls les encaissements en attente peuvent être modifiés.');
           }
 
-          const resolvedContratId = targetContratId || p.contrat_id;
-          const contrat = contrats.find((c) => c.id === resolvedContratId) || p.contrat;
+          const currentContratId = targetContratId || p.contrat_id;
+          const contrat = contrats.find((c) => c.id === currentContratId) || p.contrat;
           const bien = biens.find((b) => b.id === contrat.bien_id) || p.contrat.bien;
           const proprietaire =
             proprietaires.find((pr) => pr.id === bien.proprietaire_id) || p.contrat.bien.proprietaire;
           const locataire =
             profiles.find((u) => u.id === contrat.locataire_profile_id) || p.contrat.locataire;
 
+          const currentRate = typeof contrat?.taux_commission === 'number' ? contrat.taux_commission : 10;
           const newMontant = payload.montant !== undefined ? payload.montant : p.montant_total_paye;
-          const commission_cabinet = Math.round(newMontant * 0.10);
+          const commission_cabinet = Math.round(newMontant * (currentRate / 100));
           const montant_reversable_proprietaire = newMontant - commission_cabinet;
 
           const newMois = payload.mois !== undefined ? payload.mois : p.mois_concerne;
@@ -1083,7 +1095,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
           updatedPayment = {
             ...p,
-            contrat_id: resolvedContratId,
+            contrat_id: currentContratId,
             mois_concerne: newMois,
             annee_concernee: newAnnee,
             montant_total_paye: newMontant,
@@ -1111,7 +1123,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       })
     );
 
-    if (!updatedPayment) throw new Error('Encaissement introuvable.');
+    if (!updatedPayment) throw new Error('Encaissement non trouvé');
     return updatedPayment;
   };
 

@@ -86,8 +86,10 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({
     );
   }
 
+  const selectedContrat = contrats.find((c) => c.id === selectedContratId) || paiement.contrat;
+  const tauxCom = typeof selectedContrat?.taux_commission === 'number' ? selectedContrat.taux_commission : 10;
   const numMontant = typeof montant === 'number' ? montant : 0;
-  const commission = Math.round(numMontant * 0.1);
+  const commission = Math.round(numMontant * (tauxCom / 100));
   const netProprietaire = numMontant - commission;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -226,13 +228,13 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({
           {numMontant > 0 && (
             <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span className="text-slate-500 block">Commission Cabinet (10%) :</span>
+                <span className="text-slate-500 block">Commission Cabinet ({tauxCom}%) :</span>
                 <span className="font-mono font-bold text-amber-800 text-sm">
                   {formatFCFA(commission)}
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-slate-500 block">Net Propriétaire (90%) :</span>
+                <span className="text-slate-500 block">Net Propriétaire ({100 - tauxCom}%) :</span>
                 <span className="font-mono font-bold text-slate-900 text-sm">
                   {formatFCFA(netProprietaire)}
                 </span>

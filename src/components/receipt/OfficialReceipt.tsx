@@ -333,19 +333,29 @@ export const OfficialReceipt: React.FC<OfficialReceiptProps> = ({
         </div>
 
         {/* Accounting Split Note (Agency vs Owner) */}
-        <div className="mb-8 p-3 rounded-lg bg-emerald-50/50 border border-emerald-200/60 text-xs text-slate-700 flex flex-col sm:flex-row justify-between items-center gap-2">
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-600" />
-            <span>
-              <strong>Ventilation comptable (Mandat de gestion) :</strong> Commission Cabinet (10%) ={' '}
-              <span className="font-mono font-bold text-slate-900">{formatFCFA(paiement.commission_cabinet)}</span> • Reversable Bailleur (90%) ={' '}
-              <span className="font-mono font-bold text-slate-900">{formatFCFA(paiement.montant_reversable_proprietaire)}</span>
-            </span>
-          </div>
-          <span className="text-[11px] font-mono text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded font-bold">
-            Conforme OHADA
-          </span>
-        </div>
+        {(() => {
+          const contractRate = typeof paiement.contrat?.taux_commission === 'number'
+            ? paiement.contrat.taux_commission
+            : (paiement.montant_total_paye > 0 && paiement.commission_cabinet
+                ? Math.round((paiement.commission_cabinet / paiement.montant_total_paye) * 100)
+                : 10);
+          const ownerRate = 100 - contractRate;
+          return (
+            <div className="mb-8 p-3 rounded-lg bg-emerald-50/50 border border-emerald-200/60 text-xs text-slate-700 flex flex-col sm:flex-row justify-between items-center gap-2">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-600" />
+                <span>
+                  <strong>Ventilation comptable (Mandat de gestion) :</strong> Commission Cabinet ({contractRate}%) ={' '}
+                  <span className="font-mono font-bold text-slate-900">{formatFCFA(paiement.commission_cabinet)}</span> • Reversable Bailleur ({ownerRate}%) ={' '}
+                  <span className="font-mono font-bold text-slate-900">{formatFCFA(paiement.montant_reversable_proprietaire)}</span>
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded font-bold">
+                Conforme OHADA
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Footer: Stamp, Signature & Verification QR Code */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-slate-200 items-end">

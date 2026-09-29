@@ -169,7 +169,7 @@ export const OwnerRemittanceStatement: React.FC<OwnerRemittanceStatementProps> =
           </div>
 
           <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4">
-            <p className="text-xs font-medium text-amber-800 uppercase">Commission Cabinet (10%)</p>
+            <p className="text-xs font-medium text-amber-800 uppercase">Commissions Cabinet</p>
             <p className="text-xl font-mono font-bold text-amber-900 mt-1">
               - {formatFCFA(totalCommissionCabinet)}
             </p>
@@ -183,7 +183,7 @@ export const OwnerRemittanceStatement: React.FC<OwnerRemittanceStatementProps> =
           </div>
 
           <div className="bg-emerald-600 text-white rounded-xl p-4 shadow-lg shadow-emerald-700/20">
-            <p className="text-xs font-semibold uppercase text-emerald-100">Net à Reverser (90% - Trav.)</p>
+            <p className="text-xs font-semibold uppercase text-emerald-100">Net à Reverser Bailleur</p>
             <p className="text-2xl font-mono font-black text-white mt-1">
               {formatFCFA(Math.max(0, netReversable))}
             </p>
@@ -203,7 +203,7 @@ export const OwnerRemittanceStatement: React.FC<OwnerRemittanceStatementProps> =
                   <th className="py-2.5 px-4">Locataire</th>
                   <th className="py-2.5 px-4">N° Quittance</th>
                   <th className="py-2.5 px-4 text-right">Loyer Encaissé</th>
-                  <th className="py-2.5 px-4 text-right">Com. 10%</th>
+                  <th className="py-2.5 px-4 text-right">Com. Cabinet</th>
                   <th className="py-2.5 px-4 text-right">Reversable Brut</th>
                 </tr>
               </thead>

@@ -87,7 +87,12 @@ export const PaymentValidationModal: React.FC<PaymentValidationModalProps> = ({
     );
   }
 
-  const commission = paiement.commission_cabinet || Math.round(paiement.montant_total_paye * 0.1);
+  const contractRate = typeof paiement.contrat?.taux_commission === 'number'
+    ? paiement.contrat.taux_commission
+    : (paiement.montant_total_paye > 0 && paiement.commission_cabinet
+        ? Math.round((paiement.commission_cabinet / paiement.montant_total_paye) * 100)
+        : 10);
+  const commission = paiement.commission_cabinet || Math.round(paiement.montant_total_paye * (contractRate / 100));
   const reversement = paiement.montant_reversable_proprietaire || (paiement.montant_total_paye - commission);
 
   return (
@@ -167,14 +172,14 @@ export const PaymentValidationModal: React.FC<PaymentValidationModalProps> = ({
             {/* Split Breakdown */}
             <div className="grid grid-cols-2 gap-4 pt-1">
               <div className="bg-slate-800/80 rounded-lg p-3 border border-slate-700">
-                <p className="text-xs text-slate-400 font-medium">Commission Cabinet (10%)</p>
+                <p className="text-xs text-slate-400 font-medium">Commission Cabinet ({contractRate}%)</p>
                 <p className="text-base font-mono font-bold text-amber-300 mt-0.5">
                   {formatFCFA(commission)}
                 </p>
                 <p className="text-[10px] text-slate-400">Honoraires de gestion</p>
               </div>
               <div className="bg-slate-800/80 rounded-lg p-3 border border-slate-700">
-                <p className="text-xs text-slate-400 font-medium">Reversement Propriétaire (90%)</p>
+                <p className="text-xs text-slate-400 font-medium">Reversement Propriétaire ({100 - contractRate}%)</p>
                 <p className="text-base font-mono font-bold text-teal-300 mt-0.5">
                   {formatFCFA(reversement)}
                 </p>

@@ -5,18 +5,18 @@ export interface RentBreakdown {
   travauxImputes: TravauxReparation[];
   totalTravauxImputes: number;
   montantTotalExige: number;
-  commissionCabinet: number; // 10%
-  montantReversableProprietaire: number; // 90%
+  commissionCabinet: number;
+  montantReversableProprietaire: number;
+  tauxCommission: number;
 }
 
 /**
- * Calculates the exact rent for a given month considering imputed repairs.
- * Rule: Si une réparation est marquée `impute_au_loyer`, le montant du loyer à payer
- * pour le mois ciblé est automatiquement : Loyer de base + Coût réparation.
+ * Calculates the exact rent for a given month considering imputed repairs and lease-specific commission rate.
  */
 export function calculateLoyerDuMois(
   loyerBase: number,
-  reparations: TravauxReparation[] = []
+  reparations: TravauxReparation[] = [],
+  tauxCommission: number = 10
 ): RentBreakdown {
   const travauxImputes = reparations.filter(
     (rep) => rep.imputation === 'impute_au_loyer'
@@ -25,8 +25,9 @@ export function calculateLoyerDuMois(
   const totalTravauxImputes = travauxImputes.reduce((sum, rep) => sum + (rep.cout || 0), 0);
   const montantTotalExige = loyerBase + totalTravauxImputes;
 
-  // Split: 10% Cabinet / 90% Propriétaire
-  const commissionCabinet = Math.round(montantTotalExige * 0.10);
+  // Split: Variable % Cabinet / (100 - %) Propriétaire
+  const rate = typeof tauxCommission === 'number' && tauxCommission >= 0 ? tauxCommission : 10;
+  const commissionCabinet = Math.round(montantTotalExige * (rate / 100));
   const montantReversableProprietaire = montantTotalExige - commissionCabinet;
 
   return {
@@ -36,22 +37,29 @@ export function calculateLoyerDuMois(
     montantTotalExige,
     commissionCabinet,
     montantReversableProprietaire,
+    tauxCommission: rate,
   };
 }
 
 /**
- * Calculates 10% commission and 90% owner remittance.
+ * Calculates variable commission and owner remittance based on custom rate (default 10%).
  */
-export function calculateCommissionSplit(totalPaye: number): {
+export function calculateCommissionSplit(
+  totalPaye: number,
+  tauxCommission: number = 10
+): {
   commissionCabinet: number;
   montantReversableProprietaire: number;
+  tauxCommission: number;
 } {
-  const commissionCabinet = Math.round(totalPaye * 0.10);
+  const rate = typeof tauxCommission === 'number' && tauxCommission >= 0 ? tauxCommission : 10;
+  const commissionCabinet = Math.round(totalPaye * (rate / 100));
   const montantReversableProprietaire = totalPaye - commissionCabinet;
 
   return {
     commissionCabinet,
     montantReversableProprietaire,
+    tauxCommission: rate,
   };
 }
 

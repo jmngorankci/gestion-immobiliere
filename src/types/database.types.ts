@@ -138,6 +138,7 @@ export interface Database {
           locataire_profile_id: string;
           loyer_mensuel: number;
           depot_garantie: number;
+          taux_commission: number;
           date_debut: string;
           date_fin: string | null;
           statut: LeaseStatus;
@@ -150,6 +151,7 @@ export interface Database {
           locataire_profile_id: string;
           loyer_mensuel: number;
           depot_garantie: number;
+          taux_commission?: number;
           date_debut: string;
           date_fin?: string | null;
           statut?: LeaseStatus;
@@ -162,6 +164,7 @@ export interface Database {
           locataire_profile_id?: string;
           loyer_mensuel?: number;
           depot_garantie?: number;
+          taux_commission?: number;
           date_debut?: string;
           date_fin?: string | null;
           statut?: LeaseStatus;

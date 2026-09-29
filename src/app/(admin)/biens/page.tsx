@@ -86,6 +86,7 @@ export default function BiensPage() {
   const [locBienId, setLocBienId] = useState('');
   const [locLoyer, setLocLoyer] = useState<number | ''>('');
   const [locCaution, setLocCaution] = useState<number | ''>('');
+  const [locTauxCommission, setLocTauxCommission] = useState<number | ''>(10);
   const [locDateDebut, setLocDateDebut] = useState(new Date().toISOString().split('T')[0]);
   const [locConditions, setLocConditions] = useState('');
 
@@ -217,6 +218,7 @@ export default function BiensPage() {
     setLocBienId('');
     setLocLoyer('');
     setLocCaution('');
+    setLocTauxCommission(10);
     setLocDateDebut(new Date().toISOString().split('T')[0]);
     setLocConditions('');
     setShowLocataireModal(true);
@@ -232,6 +234,7 @@ export default function BiensPage() {
     setLocBienId(c.bien_id);
     setLocLoyer(c.loyer_mensuel);
     setLocCaution(c.depot_garantie);
+    setLocTauxCommission(c.taux_commission ?? 10);
     setLocDateDebut(c.date_debut);
     setLocConditions(c.conditions_particulieres || '');
     setShowLocataireModal(true);
@@ -245,11 +248,14 @@ export default function BiensPage() {
       return;
     }
 
+    const appliedCommissionRate = typeof locTauxCommission === 'number' ? locTauxCommission : (Number(locTauxCommission) || 10);
+
     if (editingContrat) {
       await modifierContrat(editingContrat.id, {
         bien_id: locBienId,
         loyer_mensuel: Number(locLoyer),
         depot_garantie: Number(locCaution),
+        taux_commission: appliedCommissionRate,
         date_debut: locDateDebut,
         conditions_particulieres: locConditions || undefined,
       });
@@ -271,6 +277,7 @@ export default function BiensPage() {
         bien_id: locBienId,
         loyer_mensuel: Number(locLoyer),
         depot_garantie: Number(locCaution),
+        taux_commission: appliedCommissionRate,
         date_debut: locDateDebut,
         conditions_particulieres: locConditions || undefined,
       });
@@ -650,6 +657,7 @@ export default function BiensPage() {
                   <th className="py-3.5 px-4">Locataire (Preneur)</th>
                   <th className="py-3.5 px-4">Bien Loué</th>
                   <th className="py-3.5 px-4 text-right">Loyer Contractuel</th>
+                  <th className="py-3.5 px-4 text-center">Taux Com.</th>
                   <th className="py-3.5 px-4 text-right">Dépôt Garantie</th>
                   <th className="py-3.5 px-4">Date Début</th>
                   <th className="py-3.5 px-4 text-center">Statut Bail</th>
@@ -661,6 +669,8 @@ export default function BiensPage() {
                   const loc = profiles.find((u) => u.id === c.locataire_profile_id);
                   const bien = biens.find((b) => b.id === c.bien_id);
                   const isActif = c.statut === 'actif';
+                  const rate = c.taux_commission ?? 10;
+                  const comMensuelle = Math.round(c.loyer_mensuel * (rate / 100));
 
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/80 transition">
@@ -681,6 +691,15 @@ export default function BiensPage() {
 
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 text-base">
                         {formatFCFA(c.loyer_mensuel)}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          {rate}%
+                        </span>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {formatFCFA(comMensuelle)}/m
+                        </p>
                       </td>
 
                       <td className="py-3.5 px-4 text-right font-mono text-slate-600 text-xs">
@@ -1263,16 +1282,58 @@ export default function BiensPage() {
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700">Date de Prise d'Effet du Bail *</label>
-                  <input
-                    type="date"
-                    value={locDateDebut}
-                    onChange={(e) => setLocDateDebut(e.target.value)}
-                    className="w-full text-xs p-2 bg-white border border-slate-300 rounded-xl"
-                    required
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700">
+                      Taux Commission Cabinet (%) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="100"
+                        value={locTauxCommission}
+                        onChange={(e) => setLocTauxCommission(e.target.value === '' ? '' : Number(e.target.value))}
+                        placeholder="10"
+                        className="w-full text-xs p-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-rose-600 focus:ring-2 focus:ring-rose-500"
+                        required
+                      />
+                      <span className="absolute right-2.5 top-2 text-xs font-bold text-slate-400 pointer-events-none">
+                        %
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-700">Date de Prise d'Effet *</label>
+                    <input
+                      type="date"
+                      value={locDateDebut}
+                      onChange={(e) => setLocDateDebut(e.target.value)}
+                      className="w-full text-xs p-2 bg-white border border-slate-300 rounded-xl"
+                      required
+                    />
+                  </div>
                 </div>
+
+                {/* Simulation de répartition de la commission */}
+                {Number(locLoyer) > 0 && (
+                  <div className="p-3 bg-white border border-emerald-300 rounded-xl space-y-1 text-xs">
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span>Commission Cabinet ({locTauxCommission || 0}%) :</span>
+                      <span className="font-mono font-bold text-rose-600">
+                        {formatFCFA(Math.round((Number(locLoyer) || 0) * ((Number(locTauxCommission) || 0) / 100)))} / mois
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span>Net Propriétaire ({100 - (Number(locTauxCommission) || 0)}%) :</span>
+                      <span className="font-mono font-bold text-emerald-800">
+                        {formatFCFA((Number(locLoyer) || 0) - Math.round((Number(locLoyer) || 0) * ((Number(locTauxCommission) || 0) / 100)))} / mois
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">
