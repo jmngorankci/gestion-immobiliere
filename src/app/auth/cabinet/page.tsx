@@ -233,6 +233,48 @@ export default function CabinetLoginPage() {
               <span>{isLoading ? 'Vérification...' : 'CONNEXION'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+
+            {/* Comptes Gestionnaires Configurés / Accès Rapide */}
+            <div className="pt-4 border-t border-slate-800 space-y-2">
+              <p className="text-[11px] font-bold text-slate-400 uppercase text-center flex items-center justify-center space-x-1">
+                <span>Comptes Configurés (Accès Rapide) :</span>
+              </p>
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifiant('admin@cabinet-immo.ci');
+                    setMotDePasse('admin123');
+                  }}
+                  className="w-full p-2.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl flex items-center justify-between text-xs text-left transition group/acc"
+                >
+                  <div>
+                    <p className="font-bold text-white group-hover/acc:text-emerald-400">Kouamé Konan Yves (Directeur)</p>
+                    <p className="text-[10px] text-slate-500 font-mono">admin@cabinet-immo.ci • admin123</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                    Super Admin
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifiant('awa.diallo@cabinet-immo.ci');
+                    setMotDePasse('gestion123');
+                  }}
+                  className="w-full p-2.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl flex items-center justify-between text-xs text-left transition group/acc"
+                >
+                  <div>
+                    <p className="font-bold text-white group-hover/acc:text-teal-400">Awa Diallo (Gestionnaire)</p>
+                    <p className="text-[10px] text-slate-500 font-mono">awa.diallo@cabinet-immo.ci • gestion123</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-teal-400 bg-teal-950 px-2 py-0.5 rounded border border-teal-800">
+                    Gestionnaire
+                  </span>
+                </button>
+              </div>
+            </div>
           </form>
         )}
 
