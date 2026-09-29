@@ -17,11 +17,18 @@ import {
   CreditCard,
   Wrench,
   FileSpreadsheet,
+  Droplets,
+  FileText,
+  RefreshCw,
+  Home,
+  AlertCircle,
+  Sparkles,
+  ChevronRight,
+  Calendar,
 } from 'lucide-react';
-import { PaymentValidationTable } from '@/components/admin/PaymentValidationTable';
 
 export default function AdminDashboardPage() {
-  const { paiements, biens, contrats, proprietaires, validerPaiement, rejeterPaiement } = useAppStore();
+  const { paiements, biens, contrats, proprietaires, travaux } = useAppStore();
 
   const validatedPayments = paiements.filter((p) => p.statut === 'valide');
   const pendingPayments = paiements.filter((p) => p.statut === 'en_attente');
@@ -33,6 +40,54 @@ export default function AdminDashboardPage() {
   const totalBiens = biens.length;
   const biensOccupes = biens.filter((b) => b.est_occupe).length;
   const tauxOccupation = totalBiens > 0 ? Math.round((biensOccupes / totalBiens) * 100) : 0;
+
+  // Données Échéances de loyers (Septembre 2026)
+  const echeancesData = [
+    {
+      initials: 'JK',
+      avatarBg: 'bg-emerald-100 text-emerald-800',
+      locataire: 'Jean Kouassi',
+      bienNom: 'Résidence Les Palmiers · A12',
+      residence: 'Résidence Les Palmiers',
+      echeance: '15/09/2026',
+      montant: '450 000 FCFA',
+      statut: 'À jour',
+      statutBadge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    },
+    {
+      initials: 'NT',
+      avatarBg: 'bg-teal-100 text-teal-800',
+      locataire: 'Nadia Traoré',
+      bienNom: 'Immeuble Central · B04',
+      residence: 'Immeuble Central',
+      echeance: '16/09/2026',
+      montant: '450 000 FCFA',
+      statut: 'À jour',
+      statutBadge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    },
+    {
+      initials: 'MK',
+      avatarBg: 'bg-rose-100 text-rose-800',
+      locataire: 'Moussa Koné',
+      bienNom: 'Résidence Azur · C07',
+      residence: 'Résidence Azur',
+      echeance: '17/09/2026',
+      montant: '320 000 FCFA',
+      statut: 'Retard',
+      statutBadge: 'bg-rose-50 text-rose-700 border-rose-200',
+    },
+    {
+      initials: 'CY',
+      avatarBg: 'bg-blue-100 text-blue-800',
+      locataire: 'Claire Yao',
+      bienNom: 'Villa Horizon · V01',
+      residence: 'Villa Horizon',
+      echeance: '18/09/2026',
+      montant: '450 000 FCFA',
+      statut: 'Nouveau',
+      statutBadge: 'bg-sky-50 text-sky-700 border-sky-200',
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -51,7 +106,7 @@ export default function AdminDashboardPage() {
           </p>
         </div>
 
-        {/* Action button inside banner */}
+        {/* Action buttons inside banner */}
         <div className="mt-6 flex flex-wrap gap-3 relative z-10">
           <Link
             href="/encaissements"
@@ -145,31 +200,222 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Payment Validation Workflow Table */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Module de Validation des Encaissements & Reçus
-            </h2>
-            <p className="text-xs text-slate-500">
-              Les locataires ne peuvent obtenir de reçu avant validation formelle.
-            </p>
+      {/* Main Grid: Left Section (Tableau des Échéances + Activité) & Right Section (À traiter + Portefeuille) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Left Column (Span 2) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Tableau des Échéances de loyers */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 flex items-center">
+                  <Calendar className="w-5 h-5 mr-2 text-emerald-600" />
+                  Tableau des Échéances de loyers
+                </h2>
+                <span className="text-xs font-bold text-slate-500">Septembre 2026</span>
+              </div>
+
+              <Link
+                href="/rapports"
+                className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center"
+              >
+                Voir tous les baux <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
+              </Link>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-700 font-bold uppercase border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Locataire</th>
+                    <th className="py-3 px-4">Bien</th>
+                    <th className="py-3 px-4">Échéance</th>
+                    <th className="py-3 px-4 text-right">Montant</th>
+                    <th className="py-3 px-4 text-center">Statut</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {echeancesData.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/70 transition">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${item.avatarBg}`}
+                          >
+                            {item.initials}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 text-sm">{item.locataire}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <p className="font-semibold text-slate-800">{item.bienNom}</p>
+                        <p className="text-[11px] text-slate-400">{item.residence}</p>
+                      </td>
+
+                      <td className="py-3.5 px-4 font-mono text-slate-600 font-medium">
+                        {item.echeance}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right font-mono font-extrabold text-slate-900 text-sm">
+                        {item.montant}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-center">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${item.statutBadge}`}
+                        >
+                          {item.statut === 'À jour' && (
+                            <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" />
+                          )}
+                          {item.statut === 'Retard' && (
+                            <AlertTriangle className="w-3 h-3 mr-1 text-rose-600" />
+                          )}
+                          {item.statut === 'Nouveau' && (
+                            <Sparkles className="w-3 h-3 mr-1 text-sky-600" />
+                          )}
+                          {item.statut}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <Link
-            href="/encaissements"
-            className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center"
-          >
-            Voir tous les paiements <ArrowUpRight className="w-3.5 h-3.5 ml-1" />
-          </Link>
+          {/* Activité récente */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <h2 className="text-base font-extrabold text-slate-900 flex items-center">
+              <Clock className="w-5 h-5 mr-2 text-slate-600" />
+              Activité récente
+            </h2>
+
+            <div className="space-y-3">
+              <div className="flex items-start space-x-3 p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/80 transition">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-800">
+                    <span className="font-bold text-slate-900">12 sept.</span> · Quittance Q-2026-0912 générée
+                  </p>
+                  <p className="text-[11px] text-slate-500">Paiement validé avec succès par l'administration.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3 p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/80 transition">
+                <div className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-800">
+                    <span className="font-bold text-slate-900">11 sept.</span> · Contrat de Nadia Traoré renouvelé
+                  </p>
+                  <p className="text-[11px] text-slate-500">Bail prolongé pour 12 mois à l'Immeuble Central.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3 p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/80 transition">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-800">
+                    <span className="font-bold text-slate-900">10 sept.</span> · Intervention maintenance clôturée
+                  </p>
+                  <p className="text-[11px] text-slate-500">Réparation plomberie effectuée et facture imputée.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <PaymentValidationTable
-          paiements={paiements}
-          onValidate={validerPaiement}
-          onReject={rejeterPaiement}
-        />
+        {/* Right Column (Span 1) */}
+        <div className="space-y-6">
+          {/* À traiter / Urgent */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-base font-extrabold text-slate-900">À traiter</h2>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white uppercase tracking-wider animate-pulse">
+                Urgent
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {/* Item 1 */}
+              <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200/80 space-y-1.5 hover:bg-rose-50 transition">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-1.5 text-xs font-bold text-rose-900">
+                    <Droplets className="w-4 h-4 text-rose-600" />
+                    <span>Fuite d’eau · A12</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-rose-200/70 text-rose-900 text-[10px] font-extrabold rounded-md">
+                    Aujourd’hui
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium">Résidence Les Palmiers</p>
+              </div>
+
+              {/* Item 2 */}
+              <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1.5 hover:bg-amber-50 transition">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-1.5 text-xs font-bold text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Loyer en retard</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-amber-200/70 text-amber-900 text-[10px] font-extrabold rounded-md">
+                    Demain
+                  </span>
+                </div>
+                <p className="text-xs text-slate-700 font-semibold">
+                  Moussa Koné · <span className="font-mono text-slate-900">320 000 FCFA</span>
+                </p>
+              </div>
+
+              {/* Item 3 */}
+              <div className="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 space-y-1.5 hover:bg-indigo-50 transition">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-1.5 text-xs font-bold text-indigo-900">
+                    <FileText className="w-4 h-4 text-indigo-600" />
+                    <span>Contrat à renouveler</span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 font-medium">Immeuble Central · B04</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Portefeuille par statut */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+            <h2 className="text-base font-extrabold text-slate-900 flex items-center">
+              <Building2 className="w-5 h-5 mr-2 text-slate-600" />
+              Portefeuille par statut
+            </h2>
+
+            <div className="grid grid-cols-3 gap-3">
+              {/* Loués */}
+              <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-100 text-center space-y-1">
+                <p className="text-[11px] font-bold text-emerald-800">Loués</p>
+                <p className="text-2xl font-black text-emerald-900">108</p>
+              </div>
+
+              {/* Disponibles */}
+              <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-100 text-center space-y-1">
+                <p className="text-[11px] font-bold text-amber-800">Disponibles</p>
+                <p className="text-2xl font-black text-amber-900">11</p>
+              </div>
+
+              {/* Maintenance */}
+              <div className="p-3.5 bg-slate-100 rounded-2xl border border-slate-200 text-center space-y-1">
+                <p className="text-[11px] font-bold text-slate-700">Maintenance</p>
+                <p className="text-2xl font-black text-slate-900">7</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
