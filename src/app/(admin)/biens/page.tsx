@@ -27,6 +27,7 @@ import {
   List,
   Sparkles,
 } from 'lucide-react';
+import { ProprietaireBiensModal } from '@/components/admin/ProprietaireBiensModal';
 
 export default function BiensPage() {
   const {
@@ -60,6 +61,9 @@ export default function BiensPage() {
 
   const [showLocataireModal, setShowLocataireModal] = useState(false);
   const [editingContrat, setEditingContrat] = useState<ContratBail | null>(null);
+
+  // Propriétaire Biens Popup Modal
+  const [proprietaireForBiensModal, setProprietaireForBiensModal] = useState<Proprietaire | null>(null);
 
   // Form states: Bien
   const [bienCode, setBienCode] = useState('');
@@ -509,13 +513,26 @@ export default function BiensPage() {
                       </td>
 
                       <td className="py-3.5 px-4 text-center">
-                        <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-full text-xs">
-                          {ownedBiens.length} bien(s)
-                        </span>
+                        <button
+                          onClick={() => setProprietaireForBiensModal(p)}
+                          className="inline-flex items-center space-x-1.5 font-bold text-slate-800 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 px-3 py-1.5 rounded-xl text-xs transition active:scale-95 shadow-xs group"
+                          title="Cliquer pour afficher la liste des biens de ce propriétaire"
+                        >
+                          <Building2 className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                          <span>{ownedBiens.length} bien(s)</span>
+                          <Eye className="w-3 h-3 text-slate-400 group-hover:text-emerald-600" />
+                        </button>
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end space-x-1.5">
+                          <button
+                            onClick={() => setProprietaireForBiensModal(p)}
+                            className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg transition"
+                            title="Voir la liste des biens de ce propriétaire"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => handleOpenEditProp(p)}
                             className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition"
@@ -1389,6 +1406,34 @@ export default function BiensPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ======================= MODAL: LISTE DES BIENS DU PROPRIÉTAIRE ======================= */}
+      {proprietaireForBiensModal && (
+        <ProprietaireBiensModal
+          proprietaire={proprietaireForBiensModal}
+          biens={biens.filter((b) => b.proprietaire_id === proprietaireForBiensModal.id)}
+          contrats={contrats}
+          profiles={profiles}
+          onClose={() => setProprietaireForBiensModal(null)}
+          onEditBien={(b) => {
+            setProprietaireForBiensModal(null);
+            handleOpenEditBien(b);
+          }}
+          onAddBienForProp={() => {
+            const prop = proprietaireForBiensModal;
+            setProprietaireForBiensModal(null);
+            handleOpenAddBien();
+            setBienPropId(prop.id);
+          }}
+          onAddLocataireForBien={(b) => {
+            setProprietaireForBiensModal(null);
+            handleOpenAddLocataire();
+            setLocBienId(b.id);
+            setLocLoyer(b.loyer_mensuel_reference);
+            setLocCaution(b.loyer_mensuel_reference * 2);
+          }}
+        />
       )}
     </div>
   );
