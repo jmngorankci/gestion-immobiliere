@@ -219,13 +219,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       if (errProfiles || errProps || errBiens) {
-        console.warn('Supabase fetch issue (tables may need schema setup or key is invalid):', {
+        console.warn('Supabase fetch issue:', {
           errProfiles,
           errProps,
           errBiens,
         });
         setIsSupabaseConnected(false);
-        // Fallback to local storage
         loadFromLocalStorage();
         return;
       }
@@ -235,7 +234,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const loadedProfiles = (supaProfiles && supaProfiles.length > 0) ? (supaProfiles as Profile[]) : MOCK_PROFILES;
       const loadedProps = (supaProps && supaProps.length > 0) ? (supaProps as Proprietaire[]) : MOCK_PROPRIETAIRES;
       const loadedBiens = (supaBiens && supaBiens.length > 0) ? (supaBiens as Bien[]) : MOCK_BIENS;
-      const loadedContrats = (supaContrats && supaContrats.length > 0) ? (supaContrats as ContratBail[]) : MOCK_CONTRATS;
+      const loadedContrats = (supaContrats && supaContrats.length > 0) 
+        ? (supaContrats as any[]).map((c) => ({
+            ...c,
+            taux_commission: typeof c.taux_commission === 'number' ? c.taux_commission : 10,
+          })) 
+        : MOCK_CONTRATS;
       const loadedTravaux = (supaTravaux && supaTravaux.length > 0) ? (supaTravaux as TravauxReparation[]) : MOCK_TRAVAUX;
 
       setProfiles(loadedProfiles);
@@ -255,7 +259,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         );
         setPaiements(enriched);
       } else {
-        setPaiements(MOCK_PAIEMENTS);
+        const enrichedMock = buildEnrichedPaiements(
+          MOCK_PAIEMENTS,
+          loadedContrats,
+          loadedBiens,
+          loadedProps,
+          loadedProfiles,
+          loadedTravaux
+        );
+        setPaiements(enrichedMock);
       }
 
       // Keep current user in sync
@@ -362,6 +374,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return user;
   };
 
+  // Safe Supabase helpers for contrats_bail in case taux_commission column is still pending
+  const safeInsertContrat = async (lease: ContratBail) => {
+    try {
+      const { error } = await supabase.from('contrats_bail').insert(lease);
+      if (error) {
+        if (error.message?.includes('taux_commission') || error.code === 'PGRST204') {
+          const { taux_commission, ...withoutRate } = lease;
+          await supabase.from('contrats_bail').insert(withoutRate as any);
+        } else {
+          console.warn('Supabase lease insert error:', error);
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase safeInsertContrat caught error:', err);
+    }
+  };
+
+  const safeUpdateContrat = async (id: string, payload: Partial<ContratBail>) => {
+    try {
+      const { error } = await supabase.from('contrats_bail').update(payload).eq('id', id);
+      if (error) {
+        if (error.message?.includes('taux_commission') || error.code === 'PGRST204') {
+          const { taux_commission, ...withoutRate } = payload;
+          await supabase.from('contrats_bail').update(withoutRate as any).eq('id', id);
+        } else {
+          console.warn('Supabase lease update error:', error);
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase safeUpdateContrat caught error:', err);
+    }
+  };
+
   const attribuerAccesUtilisateur = async (payload: {
     nom_complet: string;
     telephone: string;
@@ -372,6 +417,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     code_pin?: string;
     bien_id?: string;
     loyer_mensuel?: number;
+    taux_commission?: number;
   }): Promise<Profile> => {
     const defaultAvatars = [
       'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
@@ -424,11 +470,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         created_at: new Date().toISOString(),
       };
 
+      await safeInsertContrat(newContrat);
       try {
-        await supabase.from('contrats_bail').insert(newContrat);
         await supabase.from('biens').update({ est_occupe: true }).eq('id', payload.bien_id);
       } catch (err) {
-        console.warn('Supabase lease insert error:', err);
+        console.warn('Supabase update bien occupancy error:', err);
       }
 
       setContrats((prev) => [newContrat, ...prev]);
@@ -641,11 +687,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       created_at: new Date().toISOString(),
     };
 
+    await safeInsertContrat(newLease);
     try {
-      await supabase.from('contrats_bail').insert(newLease);
       await supabase.from('biens').update({ est_occupe: true }).eq('id', payload.bien_id);
     } catch (err) {
-      console.warn('Supabase lease insert error:', err);
+      console.warn('Supabase update bien occupancy error:', err);
     }
 
     setContrats((prev) => [newLease, ...prev]);
@@ -659,11 +705,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     payload: Partial<ContratBail>
   ): Promise<void> => {
     const oldContrat = contrats.find((c) => c.id === contratId);
-    try {
-      await supabase.from('contrats_bail').update(payload).eq('id', contratId);
-    } catch (err) {
-      console.warn('Supabase update lease error:', err);
-    }
+    await safeUpdateContrat(contratId, payload);
 
     setContrats((prev) =>
       prev.map((c) => (c.id === contratId ? { ...c, ...payload } : c))
