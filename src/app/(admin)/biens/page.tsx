@@ -250,40 +250,62 @@ export default function BiensPage() {
 
     const appliedCommissionRate = typeof locTauxCommission === 'number' ? locTauxCommission : (Number(locTauxCommission) || 10);
 
-    if (editingContrat) {
-      await modifierContrat(editingContrat.id, {
-        bien_id: locBienId,
-        loyer_mensuel: Number(locLoyer),
-        depot_garantie: Number(locCaution),
-        taux_commission: appliedCommissionRate,
-        date_debut: locDateDebut,
-        conditions_particulieres: locConditions || undefined,
-      });
+    try {
+      if (editingContrat) {
+        let locataireId = editingContrat.locataire_profile_id;
 
-      if (editingContrat.locataire_profile_id) {
-        await modifierAccesUtilisateur(editingContrat.locataire_profile_id, {
+        if (locataireId) {
+          const updatedProfile = await modifierAccesUtilisateur(locataireId, {
+            nom_complet: locNom,
+            telephone: locTel,
+            email: locEmail || undefined,
+            bien_id: locBienId,
+            loyer_mensuel: Number(locLoyer),
+          });
+          if (updatedProfile?.id) {
+            locataireId = updatedProfile.id;
+          }
+        } else {
+          const newProfile = await attribuerAccesUtilisateur({
+            nom_complet: locNom,
+            telephone: locTel,
+            email: locEmail || undefined,
+            role: 'locataire',
+            bien_id: locBienId,
+            loyer_mensuel: Number(locLoyer),
+            taux_commission: appliedCommissionRate,
+          });
+          locataireId = newProfile.id;
+        }
+
+        await modifierContrat(editingContrat.id, {
+          bien_id: locBienId,
+          locataire_profile_id: locataireId,
+          loyer_mensuel: Number(locLoyer),
+          depot_garantie: Number(locCaution),
+          taux_commission: appliedCommissionRate,
+          date_debut: locDateDebut,
+          conditions_particulieres: locConditions || undefined,
+        });
+      } else {
+        await ajouterLocataireEtContrat({
           nom_complet: locNom,
           telephone: locTel,
           email: locEmail || undefined,
           bien_id: locBienId,
           loyer_mensuel: Number(locLoyer),
+          depot_garantie: Number(locCaution),
+          taux_commission: appliedCommissionRate,
+          date_debut: locDateDebut,
+          conditions_particulieres: locConditions || undefined,
         });
       }
-    } else {
-      await ajouterLocataireEtContrat({
-        nom_complet: locNom,
-        telephone: locTel,
-        email: locEmail || undefined,
-        bien_id: locBienId,
-        loyer_mensuel: Number(locLoyer),
-        depot_garantie: Number(locCaution),
-        taux_commission: appliedCommissionRate,
-        date_debut: locDateDebut,
-        conditions_particulieres: locConditions || undefined,
-      });
-    }
 
-    setShowLocataireModal(false);
+      setShowLocataireModal(false);
+    } catch (err: any) {
+      console.error('Erreur enregistrement locataire/bail:', err);
+      alert(err?.message || 'Erreur lors de l enregistrement du bail.');
+    }
   };
 
   // Filtered lists

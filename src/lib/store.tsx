@@ -491,28 +491,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const modifierAccesUtilisateur = async (
     id: string,
-    updates: Partial<Profile> & { bien_id?: string; loyer_mensuel?: number }
+    updates: Partial<Profile> & { bien_id?: string; loyer_mensuel?: number; taux_commission?: number }
   ): Promise<Profile> => {
     let updated: Profile | null = null;
     const nowIso = new Date().toISOString();
+    const { bien_id, loyer_mensuel, taux_commission, ...profileUpdates } = updates;
 
-    try {
-      const { bien_id, loyer_mensuel, ...profileUpdates } = updates;
-      await supabase.from('profiles').update({ ...profileUpdates, updated_at: nowIso }).eq('id', id);
-    } catch (err) {
-      console.warn('Supabase update profile error:', err);
+    const existingProfile = profiles.find((p) => p.id === id);
+
+    if (existingProfile) {
+      updated = { ...existingProfile, ...profileUpdates, updated_at: nowIso };
+      try {
+        await supabase.from('profiles').update({ ...profileUpdates, updated_at: nowIso }).eq('id', id);
+      } catch (err) {
+        console.warn('Supabase update profile error:', err);
+      }
+      setProfiles((prev) => prev.map((p) => (p.id === id ? updated! : p)));
+    } else {
+      // Profile does not exist yet in local state: upsert into Supabase and local state
+      const fallbackId = isValidUUID(id) ? id : generateUUID();
+      const newProfile: Profile = {
+        id: fallbackId,
+        nom_complet: updates.nom_complet || 'Locataire',
+        telephone: updates.telephone || '+22500000000',
+        email: updates.email || `${fallbackId.slice(0, 8)}@locataire-ci.com`,
+        role: updates.role || 'locataire',
+        mot_de_passe: updates.mot_de_passe || 'locataire123',
+        code_pin: updates.code_pin || '1234',
+        est_actif: updates.est_actif !== undefined ? updates.est_actif : true,
+        avatar_url: updates.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+        created_at: nowIso,
+        updated_at: nowIso,
+      };
+      try {
+        await supabase.from('profiles').upsert(newProfile);
+      } catch (err) {
+        console.warn('Supabase upsert profile error:', err);
+      }
+      updated = newProfile;
+      setProfiles((prev) => [newProfile, ...prev]);
     }
 
-    setProfiles((prev) =>
-      prev.map((p) => {
-        if (p.id === id) {
-          updated = { ...p, ...updates, updated_at: nowIso };
-          return updated;
-        }
-        return p;
-      })
-    );
-    if (!updated) throw new Error('Utilisateur non trouvé');
     return updated;
   };
 
