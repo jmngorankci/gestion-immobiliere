@@ -332,7 +332,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const user = profiles.find(
       (p) =>
         (p.email?.toLowerCase() === cleanId || p.telephone.replace(/\D/g, '') === cleanId.replace(/\D/g, '')) &&
-        (p.role === 'super_admin' || p.role === 'gestionnaire')
+        (p.role === 'super_admin' || p.role === 'gestionnaire' || p.role === 'proprietaire')
     );
 
     if (!user) {

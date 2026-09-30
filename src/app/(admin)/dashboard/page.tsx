@@ -27,6 +27,7 @@ import {
   Calendar,
   Check,
   Receipt,
+  BarChart3,
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -332,26 +333,49 @@ export default function AdminDashboardPage() {
 
         {/* Action buttons inside banner */}
         <div className="mt-6 flex flex-wrap gap-3 relative z-10">
+          {/* 1. Parc Immobilier et Baux */}
           <Link
-            href="/encaissements"
+            href="/biens"
             className="inline-flex items-center px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition active:scale-95"
           >
-            <CreditCard className="w-4 h-4 mr-2" />
+            <Building2 className="w-4 h-4 mr-2" />
+            Parc Immobilier et Baux
+          </Link>
+
+          {/* 2. Traiter les paiements en attente */}
+          <Link
+            href="/encaissements"
+            className="inline-flex items-center px-4 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-emerald-300 font-bold text-xs border border-emerald-700/60 shadow-lg shadow-emerald-950/40 transition active:scale-95"
+          >
+            <CreditCard className="w-4 h-4 mr-2 text-emerald-400" />
             Traiter les {pendingPayments.length} paiements en attente
           </Link>
-          <Link
-            href="/rapports"
-            className="inline-flex items-center px-4 py-2.5 rounded-xl bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 font-bold text-xs border border-emerald-700/60 shadow-lg shadow-emerald-950/40 transition active:scale-95"
-          >
-            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-400" />
-            Rapports & Documents
-          </Link>
+
+          {/* 3. Bordereaux de Reversement */}
           <Link
             href="/reversements"
-            className="inline-flex items-center px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 transition"
+            className="inline-flex items-center px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 transition active:scale-95"
           >
-            <Wallet className="w-4 h-4 mr-2" />
+            <Wallet className="w-4 h-4 mr-2 text-amber-400" />
             Bordereaux de Reversement
+          </Link>
+
+          {/* 4. Rapports & Documents */}
+          <Link
+            href="/rapports"
+            className="inline-flex items-center px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition active:scale-95"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2 text-sky-400" />
+            Rapports & Documents
+          </Link>
+
+          {/* 5. Statistiques & Analyses */}
+          <Link
+            href="/statistiques"
+            className="inline-flex items-center px-4 py-2.5 rounded-xl bg-teal-950/90 hover:bg-teal-900 text-teal-300 font-bold text-xs border border-teal-700/60 shadow-lg shadow-teal-950/40 transition active:scale-95"
+          >
+            <BarChart3 className="w-4 h-4 mr-2 text-teal-400" />
+            Statistiques & Analyses
           </Link>
         </div>
       </div>
