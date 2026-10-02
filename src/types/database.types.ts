@@ -7,12 +7,16 @@ export type Json =
   | Json[];
 
 export type UserRole = 'super_admin' | 'gestionnaire' | 'locataire' | 'proprietaire';
-export type PropertyType = 'studio' | '2_pieces' | '3_pieces' | 'maison_basse' | 'villa' | 'appartement';
+export type PropertyType = string;
 export type LeaseStatus = 'actif' | 'resilie';
 export type PaymentMode = 'espece' | 'mobile_money' | 'virement';
 export type PaymentStatus = 'en_attente' | 'valide' | 'rejete';
 export type RepairImputation = 'non_impute' | 'impute_au_loyer' | 'a_la_charge_proprietaire' | 'a_la_charge_cabinet';
 export type RepairStatus = 'en_attente' | 'realise' | 'annule';
+
+export type IntentionBien = 'location' | 'vente' | 'mixte';
+export type StatutVente = 'disponible' | 'sous_compromis' | 'vendu';
+export type StatutTransactionVente = 'initiee' | 'compromis_signe' | 'acte_final_signe' | 'annulee';
 
 export interface Database {
   public: {
@@ -96,12 +100,15 @@ export interface Database {
           proprietaire_id: string;
           code_reference: string;
           type_bien: PropertyType;
-          loyer_mensuel_reference: number;
+          loyer_mensuel_reference: number | null;
           commune_quartier: string;
           adresse_precise: string;
           est_occupe: boolean;
           description: string | null;
           photos_urls: string[] | null;
+          intention: IntentionBien;
+          prix_vente_demande: number;
+          statut_vente: StatutVente;
           created_at: string;
         };
         Insert: {
@@ -109,12 +116,15 @@ export interface Database {
           proprietaire_id: string;
           code_reference: string;
           type_bien: PropertyType;
-          loyer_mensuel_reference: number;
+          loyer_mensuel_reference?: number | null;
           commune_quartier: string;
           adresse_precise: string;
           est_occupe?: boolean;
           description?: string | null;
           photos_urls?: string[] | null;
+          intention?: IntentionBien;
+          prix_vente_demande?: number;
+          statut_vente?: StatutVente;
           created_at?: string;
         };
         Update: {
@@ -122,12 +132,15 @@ export interface Database {
           proprietaire_id?: string;
           code_reference?: string;
           type_bien?: PropertyType;
-          loyer_mensuel_reference?: number;
+          loyer_mensuel_reference?: number | null;
           commune_quartier?: string;
           adresse_precise?: string;
           est_occupe?: boolean;
           description?: string | null;
           photos_urls?: string[] | null;
+          intention?: IntentionBien;
+          prix_vente_demande?: number;
+          statut_vente?: StatutVente;
           created_at?: string;
         };
       };
@@ -275,6 +288,166 @@ export interface Database {
           created_at?: string;
         };
       };
+      acquereurs: {
+        Row: {
+          id: string;
+          nom_complet: string;
+          telephone: string;
+          email: string | null;
+          adresse: string | null;
+          budget_max: number | null;
+          apport_personnel: number | null;
+          criteres_recherche: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          nom_complet: string;
+          telephone: string;
+          email?: string | null;
+          adresse?: string | null;
+          budget_max?: number | null;
+          apport_personnel?: number | null;
+          criteres_recherche?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          nom_complet?: string;
+          telephone?: string;
+          email?: string | null;
+          adresse?: string | null;
+          budget_max?: number | null;
+          apport_personnel?: number | null;
+          criteres_recherche?: string | null;
+          created_at?: string;
+        };
+      };
+      notaires: {
+        Row: {
+          id: string;
+          nom_complet: string;
+          etude_nom: string | null;
+          telephone: string;
+          email: string | null;
+          adresse: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          nom_complet: string;
+          etude_nom?: string | null;
+          telephone: string;
+          email?: string | null;
+          adresse?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          nom_complet?: string;
+          etude_nom?: string | null;
+          telephone?: string;
+          email?: string | null;
+          adresse?: string | null;
+          created_at?: string;
+        };
+      };
+      transactions_ventes: {
+        Row: {
+          id: string;
+          bien_id: string;
+          vendeur_id: string;
+          acquereur_id: string;
+          notaire_id: string | null;
+          prix_convenu: number;
+          frais_agence: number;
+          statut: StatutTransactionVente;
+          date_compromis: string | null;
+          date_acte_final: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bien_id: string;
+          vendeur_id: string;
+          acquereur_id: string;
+          notaire_id?: string | null;
+          prix_convenu: number;
+          frais_agence?: number;
+          statut?: StatutTransactionVente;
+          date_compromis?: string | null;
+          date_acte_final?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          bien_id?: string;
+          vendeur_id?: string;
+          acquereur_id?: string;
+          notaire_id?: string | null;
+          prix_convenu?: number;
+          frais_agence?: number;
+          statut?: StatutTransactionVente;
+          date_compromis?: string | null;
+          date_acte_final?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      documents_justificatifs: {
+        Row: {
+          id: string;
+          nom_fichier: string;
+          type_document: string;
+          fichier_url: string;
+          taille_bytes: number | null;
+          contrat_bail_id: string | null;
+          transaction_vente_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          nom_fichier: string;
+          type_document: string;
+          fichier_url: string;
+          taille_bytes?: number | null;
+          contrat_bail_id?: string | null;
+          transaction_vente_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          nom_fichier?: string;
+          type_document?: string;
+          fichier_url?: string;
+          taille_bytes?: number | null;
+          contrat_bail_id?: string | null;
+          transaction_vente_id?: string | null;
+          created_at?: string;
+        };
+      };
+      types_biens: {
+        Row: {
+          id: string;
+          nom: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          nom: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          nom?: string;
+          created_at?: string;
+        };
+      };
     };
   };
 }
@@ -285,6 +458,12 @@ export type Bien = Database['public']['Tables']['biens']['Row'];
 export type ContratBail = Database['public']['Tables']['contrats_bail']['Row'];
 export type PaiementLoyer = Database['public']['Tables']['paiements_loyer']['Row'];
 export type TravauxReparation = Database['public']['Tables']['travaux_reparations']['Row'];
+
+export type Acquereur = Database['public']['Tables']['acquereurs']['Row'];
+export type Notaire = Database['public']['Tables']['notaires']['Row'];
+export type TransactionVente = Database['public']['Tables']['transactions_ventes']['Row'];
+export type DocumentJustificatif = Database['public']['Tables']['documents_justificatifs']['Row'];
+export type TypeBien = Database['public']['Tables']['types_biens']['Row'];
 
 export interface ContratWithDetails extends ContratBail {
   bien: Bien & { proprietaire: Proprietaire };

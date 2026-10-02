@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Bien, ContratBail, PropertyType, Proprietaire } from '@/types/database.types';
 import { formatFCFA, formatDateFR } from '@/lib/utils';
@@ -26,8 +26,12 @@ import {
   Tag,
   List,
   Sparkles,
+  Camera,
+  Loader2,
 } from 'lucide-react';
 import { ProprietaireBiensModal } from '@/components/admin/ProprietaireBiensModal';
+import { DocumentUploader } from '@/components/admin/DocumentUploader';
+import { createClient } from '@/lib/supabase/client';
 
 export default function BiensPage() {
   const {
@@ -35,6 +39,8 @@ export default function BiensPage() {
     proprietaires,
     contrats,
     profiles,
+    typesBiens,
+    ajouterTypeBien,
     ajouterBien,
     modifierBien,
     supprimerBien,
@@ -67,13 +73,20 @@ export default function BiensPage() {
 
   // Form states: Bien
   const [bienCode, setBienCode] = useState('');
-  const [bienType, setBienType] = useState<PropertyType>('3_pieces');
+  const [bienType, setBienType] = useState('');
   const [bienLoyer, setBienLoyer] = useState<number | ''>('');
   const [bienCommune, setBienCommune] = useState('');
   const [bienAdresse, setBienAdresse] = useState('');
   const [bienPropId, setBienPropId] = useState('');
   const [bienDescription, setBienDescription] = useState('');
   const [bienPhoto, setBienPhoto] = useState('');
+  const [bienIntention, setBienIntention] = useState<'location' | 'vente' | 'mixte'>('location');
+  const [bienPrixVente, setBienPrixVente] = useState<number | ''>('');
+
+  const bienFileInputRef = useRef<HTMLInputElement>(null);
+  const bienCameraInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const supabase = createClient();
 
   // Form states: Proprietaire
   const [propNom, setPropNom] = useState('');
@@ -98,13 +111,15 @@ export default function BiensPage() {
   const handleOpenAddBien = () => {
     setEditingBien(null);
     setBienCode('');
-    setBienType('3_pieces');
+    setBienType(typesBiens.length > 0 ? typesBiens[0].nom : '');
     setBienLoyer('');
     setBienCommune('');
     setBienAdresse('');
     setBienPropId(proprietaires[0]?.id || '');
     setBienDescription('');
     setBienPhoto('');
+    setBienIntention('location');
+    setBienPrixVente('');
     setShowBienModal(true);
   };
 
@@ -119,10 +134,41 @@ export default function BiensPage() {
     setBienPropId(b.proprietaire_id);
     setBienDescription(b.description || '');
     setBienPhoto(b.photos_urls?.[0] || '');
+    setBienIntention(b.intention || 'location');
+    setBienPrixVente(b.prix_vente || '');
     setShowBienModal(true);
   };
 
   // Submit Bien (Add or Update)
+  const handleBienPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingPhoto(true);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `bien_${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+    const filePath = `photos_biens/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documents_contrats')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      alert("Erreur lors de l'upload de la photo: " + uploadError.message);
+      setIsUploadingPhoto(false);
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents_contrats')
+      .getPublicUrl(filePath);
+
+    setBienPhoto(publicUrl);
+    setIsUploadingPhoto(false);
+    if (bienFileInputRef.current) bienFileInputRef.current.value = '';
+    if (bienCameraInputRef.current) bienCameraInputRef.current.value = '';
+  };
+
   const handleSubmitBien = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bienCode.trim() || !bienCommune.trim() || !bienLoyer || Number(bienLoyer) <= 0 || !bienPropId) {
@@ -138,6 +184,8 @@ export default function BiensPage() {
         commune_quartier: bienCommune,
         adresse_precise: bienAdresse,
         proprietaire_id: bienPropId,
+        intention: bienIntention,
+        prix_vente: bienPrixVente ? Number(bienPrixVente) : null,
         description: bienDescription,
         photos_urls: bienPhoto ? [bienPhoto] : [],
       });
@@ -149,6 +197,8 @@ export default function BiensPage() {
         commune_quartier: bienCommune,
         adresse_precise: bienAdresse,
         proprietaire_id: bienPropId,
+        intention: bienIntention,
+        prix_vente: bienPrixVente ? Number(bienPrixVente) : null,
         est_occupe: false,
         description: bienDescription,
         photos_urls: bienPhoto ? [bienPhoto] : [],
@@ -950,20 +1000,32 @@ export default function BiensPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 uppercase">
-                    Type de Bien *
-                  </label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-700 uppercase">
+                      Type de Bien *
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={async () => {
+                        const nom = prompt("Nouveau type de bien (ex: Terrain, Magasin) :");
+                        if (nom && nom.trim() !== '') {
+                          const newType = await ajouterTypeBien(nom.trim());
+                          setBienType(newType.nom);
+                        }
+                      }} 
+                      className="text-[10px] text-emerald-600 font-bold hover:underline"
+                    >
+                      + Ajouter
+                    </button>
+                  </div>
                   <select
                     value={bienType}
-                    onChange={(e) => setBienType(e.target.value as PropertyType)}
+                    onChange={(e) => setBienType(e.target.value)}
                     className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-semibold"
                   >
-                    <option value="studio">Studio</option>
-                    <option value="2_pieces">2 Pièces</option>
-                    <option value="3_pieces">3 Pièces</option>
-                    <option value="appartement">Appartement (4+ pièces)</option>
-                    <option value="villa">Villa / Duplex</option>
-                    <option value="maison_basse">Maison Basse</option>
+                    {typesBiens.map(t => (
+                      <option key={t.id} value={t.nom}>{t.nom}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1002,6 +1064,39 @@ export default function BiensPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase">
+                    Intention *
+                  </label>
+                  <select
+                    value={bienIntention}
+                    onChange={(e) => setBienIntention(e.target.value as any)}
+                    className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-semibold"
+                  >
+                    <option value="location">Location uniquement</option>
+                    <option value="vente">Vente uniquement</option>
+                    <option value="mixte">Mixte (Location ou Vente)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase">
+                    Prix de Vente (FCFA)
+                  </label>
+                  <input
+                    type="number"
+                    value={bienPrixVente}
+                    onChange={(e) => setBienPrixVente(e.target.value === '' ? '' : Number(e.target.value))}
+                    min={1000000}
+                    step={500000}
+                    placeholder="Ex: 85000000"
+                    disabled={bienIntention === 'location'}
+                    className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono font-bold disabled:opacity-50"
+                  />
                 </div>
               </div>
 
@@ -1048,15 +1143,36 @@ export default function BiensPage() {
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 uppercase">
-                  URL Photo (Optionnel)
+                  Photo du Bien (Optionnel)
                 </label>
-                <input
-                  type="text"
-                  value={bienPhoto}
-                  onChange={(e) => setBienPhoto(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
-                />
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={bienPhoto}
+                    onChange={(e) => setBienPhoto(e.target.value)}
+                    placeholder="Lien URL ou boutons..."
+                    className="flex-1 w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => bienFileInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    className="inline-flex items-center px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 shadow-sm disabled:opacity-50 h-[38px]"
+                  >
+                    📁 Parcourir
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => bienCameraInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    className="inline-flex items-center px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 shadow-sm disabled:opacity-50 h-[38px]"
+                  >
+                    {isUploadingPhoto ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Camera className="w-3.5 h-3.5 mr-1.5" />}
+                    Photo
+                  </button>
+                </div>
+                <input type="file" ref={bienFileInputRef} className="hidden" accept="image/*" onChange={handleBienPhotoUpload} />
+                <input type="file" ref={bienCameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleBienPhotoUpload} />
               </div>
 
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200">
@@ -1386,6 +1502,10 @@ export default function BiensPage() {
                   rows={2}
                   className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
                 />
+              </div>
+
+              <div className="pt-4 border-t border-slate-200">
+                <DocumentUploader contratBailId={editingContrat?.id} />
               </div>
 
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200">

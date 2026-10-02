@@ -21,6 +21,9 @@ import {
   RefreshCw,
   BarChart3,
   Users,
+  Briefcase,
+  UserPlus,
+  Scale,
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -76,6 +79,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       label: 'Parc Immobilier & Baux',
       href: '/biens',
       icon: Building2,
+    },
+    {
+      label: 'Gestion des Ventes',
+      href: '/ventes',
+      icon: Briefcase,
+    },
+    {
+      label: 'Acquéreurs',
+      href: '/acquereurs',
+      icon: UserPlus,
+    },
+    {
+      label: 'Notaires',
+      href: '/notaires',
+      icon: Scale,
     },
     {
       label: 'Encaissements & Validation',

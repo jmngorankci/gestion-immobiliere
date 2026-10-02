@@ -10,6 +10,7 @@ import {
   RepairStatus,
   TravauxReparation,
   UserRole,
+  TypeBien,
 } from '@/types/database.types';
 import {
   MOCK_BIENS,
@@ -47,6 +48,7 @@ interface AppContextType {
   contrats: ContratBail[];
   paiements: PaiementWithDetails[];
   travaux: TravauxReparation[];
+  typesBiens: TypeBien[];
   isSupabaseConnected: boolean;
   isLoading: boolean;
   rafraichirDonnees: () => Promise<void>;
@@ -78,6 +80,7 @@ interface AppContextType {
   ajouterBien: (bien: Omit<Bien, 'id' | 'created_at'>) => Promise<Bien>;
   modifierBien: (id: string, bien: Partial<Bien>) => Promise<Bien>;
   supprimerBien: (id: string) => Promise<void>;
+  ajouterTypeBien: (nom: string) => Promise<TypeBien>;
 
   // Proprietaire CRUD
   ajouterProprietaire: (prop: Omit<Proprietaire, 'id' | 'created_at'>) => Promise<Proprietaire>;
@@ -154,6 +157,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [contrats, setContrats] = useState<ContratBail[]>(MOCK_CONTRATS);
   const [paiements, setPaiements] = useState<PaiementWithDetails[]>(MOCK_PAIEMENTS);
   const [travaux, setTravaux] = useState<TravauxReparation[]>(MOCK_TRAVAUX);
+  const [typesBiens, setTypesBiens] = useState<TypeBien[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
@@ -214,6 +218,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         { data: supaContrats, error: errContrats },
         { data: supaPaiements, error: errPaiements },
         { data: supaTravaux, error: errTravaux },
+        { data: supaTypes, error: errTypes },
       ] = await Promise.all([
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
         supabase.from('proprietaires').select('*').order('created_at', { ascending: false }),
@@ -221,6 +226,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         supabase.from('contrats_bail').select('*').order('created_at', { ascending: false }),
         supabase.from('paiements_loyer').select('*').order('created_at', { ascending: false }),
         supabase.from('travaux_reparations').select('*').order('created_at', { ascending: false }),
+        supabase.from('types_biens').select('*').order('created_at', { ascending: true }),
       ]);
 
       if (errProfiles || errProps || errBiens) {
@@ -252,6 +258,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setBiens(loadedBiens);
       setContrats(loadedContrats);
       setTravaux(loadedTravaux);
+
+      if (supaTypes && supaTypes.length > 0) {
+        setTypesBiens(supaTypes as TypeBien[]);
+      } else {
+        setTypesBiens([
+          { id: '1', nom: 'Studio', created_at: new Date().toISOString() },
+          { id: '2', nom: '2 Pièces', created_at: new Date().toISOString() },
+          { id: '3', nom: '3 Pièces', created_at: new Date().toISOString() },
+          { id: '4', nom: 'Maison Basse', created_at: new Date().toISOString() },
+          { id: '5', nom: 'Villa', created_at: new Date().toISOString() },
+          { id: '6', nom: 'Appartement', created_at: new Date().toISOString() }
+        ]);
+      }
 
       if (supaPaiements && supaPaiements.length > 0) {
         const enriched = buildEnrichedPaiements(
@@ -1317,6 +1336,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const ajouterTypeBien = async (nom: string): Promise<TypeBien> => {
+    const payload = { nom };
+    let newType: TypeBien | null = null;
+    
+    if (isSupabaseConnected) {
+      const { data, error } = await supabase.from('types_biens').insert([payload]).select().single();
+      if (!error && data) newType = data as TypeBien;
+    }
+
+    if (!newType) {
+      newType = { id: generateUUID(), nom, created_at: new Date().toISOString() };
+    }
+
+    setTypesBiens(prev => [...prev, newType!]);
+    return newType;
+  };
+
   const reinitialiserDonnees = () => {
     setProfiles(MOCK_PROFILES);
     setCurrentUser(MOCK_PROFILES[0]);
@@ -1339,6 +1375,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         contrats,
         paiements,
         travaux,
+        typesBiens,
         isSupabaseConnected,
         isLoading,
         rafraichirDonnees: loadDataFromSupabase,
@@ -1352,6 +1389,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ajouterBien,
         modifierBien,
         supprimerBien,
+        ajouterTypeBien,
         ajouterProprietaire,
         modifierProprietaire,
         supprimerProprietaire,
