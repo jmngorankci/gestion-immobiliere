@@ -55,7 +55,7 @@ export const ProprietaireBiensModal: React.FC<ProprietaireBiensModalProps> = ({
   const totalLoyerMensuel = biens.reduce((sum, b) => sum + (b.loyer_mensuel_reference || 0), 0);
   const loyerActuelEncaisse = louesBiens.reduce((sum, b) => {
     const contrat = contrats.find((c) => c.bien_id === b.id && c.statut === 'actif');
-    return sum + (contrat ? contrat.loyer_mensuel : b.loyer_mensuel_reference);
+    return sum + (contrat ? contrat.loyer_mensuel : (b.loyer_mensuel_reference ?? 0));
   }, 0);
 
   // Filtered list
@@ -259,7 +259,7 @@ export const ProprietaireBiensModal: React.FC<ProprietaireBiensModalProps> = ({
               {filteredBiens.map((bien) => {
                 const contrat = contrats.find((c) => c.bien_id === bien.id && c.statut === 'actif');
                 const locataire = contrat ? profiles.find((p) => p.id === contrat.locataire_profile_id) : null;
-                const loyerEffectif = contrat ? contrat.loyer_mensuel : bien.loyer_mensuel_reference;
+                const loyerEffectif = contrat ? contrat.loyer_mensuel : (bien.loyer_mensuel_reference ?? 0);
                 const tauxCom = contrat?.taux_commission ?? 10;
                 const comCabinet = Math.round(loyerEffectif * (tauxCom / 100));
                 const netBailleur = loyerEffectif - comCabinet;
@@ -287,36 +287,55 @@ export const ProprietaireBiensModal: React.FC<ProprietaireBiensModalProps> = ({
                         <p className="text-[11px] text-slate-500 pl-4">{bien.adresse_precise}</p>
                       </div>
 
-                      {/* Status Badge */}
-                      {bien.est_occupe ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex-shrink-0">
-                          <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" />
-                          Loué
+                      {/* Status Badges */}
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        {bien.est_occupe ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" />
+                            Loué
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />
+                            Disponible
+                          </span>
+                        )}
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            bien.intention === 'vente'
+                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                              : bien.intention === 'mixte'
+                              ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                              : 'bg-blue-100 text-blue-800 border border-blue-200'
+                          }`}
+                        >
+                          {bien.intention === 'vente' ? 'Vente' : bien.intention === 'mixte' ? 'Mixte' : 'Location'}
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 flex-shrink-0">
-                          <AlertCircle className="w-3 h-3 mr-1 text-amber-600" />
-                          Disponible
-                        </span>
-                      )}
+                      </div>
                     </div>
 
                     {/* Financial split banner */}
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1 text-xs">
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-500 font-medium">Loyer Mensuel :</span>
+                        <span className="text-slate-500 font-medium">
+                          {bien.intention === 'vente' ? 'Prix Demandé :' : 'Loyer Mensuel :'}
+                        </span>
                         <span className="font-mono font-extrabold text-slate-900 text-sm">
-                          {formatFCFA(loyerEffectif)}
+                          {bien.intention === 'vente'
+                            ? formatFCFA(bien.prix_vente_demande ?? (bien as any).prix_vente ?? 0)
+                            : formatFCFA(loyerEffectif)}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center text-[11px] text-slate-500 pt-0.5 border-t border-slate-200/60">
-                        <span>
-                          Com. Cabinet ({tauxCom}%) : <strong className="text-rose-600 font-mono">{formatFCFA(comCabinet)}</strong>
-                        </span>
-                        <span>
-                          Net Bailleur : <strong className="text-emerald-800 font-mono">{formatFCFA(netBailleur)}</strong>
-                        </span>
-                      </div>
+                      {bien.intention !== 'vente' && (
+                        <div className="flex justify-between items-center text-[11px] text-slate-500 pt-0.5 border-t border-slate-200/60">
+                          <span>
+                            Com. Cabinet ({tauxCom}%) : <strong className="text-rose-600 font-mono">{formatFCFA(comCabinet)}</strong>
+                          </span>
+                          <span>
+                            Net Bailleur : <strong className="text-emerald-800 font-mono">{formatFCFA(netBailleur)}</strong>
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Lease & Tenant Details if rented */}
@@ -337,6 +356,15 @@ export const ProprietaireBiensModal: React.FC<ProprietaireBiensModalProps> = ({
                         <p className="text-[10px] text-slate-500">
                           Bail actif depuis le : <span className="font-semibold text-slate-700">{formatDateFR(contrat.date_debut)}</span>
                         </p>
+                      </div>
+                    ) : bien.intention === 'vente' ? (
+                      <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5 flex items-center justify-between">
+                        <span className="text-xs text-purple-800 font-medium">
+                          Bien en vente (Non soumis au bail)
+                        </span>
+                        <span className="text-[11px] font-bold text-purple-900 bg-purple-200 px-2 py-0.5 rounded-lg">
+                          Vente exclusive
+                        </span>
                       </div>
                     ) : (
                       <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-2.5 flex items-center justify-between">

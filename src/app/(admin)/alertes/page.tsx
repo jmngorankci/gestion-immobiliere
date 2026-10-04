@@ -609,7 +609,7 @@ export default function AlertesManagementPage() {
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] text-slate-400 block uppercase font-bold">Loyer Référence</span>
-                    <span className="font-mono font-bold text-slate-900 text-sm">{formatFCFA(b.loyer_mensuel_reference)}/mois</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm">{formatFCFA(b.loyer_mensuel_reference ?? 0)}/mois</span>
                   </div>
 
                   <Link

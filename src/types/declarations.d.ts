@@ -7,6 +7,7 @@ declare module 'lucide-react' {
     className?: string;
   }
   export type Icon = FC<IconProps>;
+
   export const LayoutDashboard: Icon;
   export const CreditCard: Icon;
   export const Building2: Icon;
@@ -61,4 +62,29 @@ declare module 'lucide-react' {
   export const KeyRound: Icon;
   export const Copy: Icon;
   export const Share2: Icon;
+
+  // Additional icons used across app
+  export const List: Icon;
+  export const Loader2: Icon;
+  export const MessageSquare: Icon;
+  export const ShieldAlert: Icon;
+  export const Send: Icon;
+  export const Check: Icon;
+  export const Droplets: Icon;
+  export const BarChart3: Icon;
+  export const Briefcase: Icon;
+  export const UserPlus: Icon;
+  export const Scale: Icon;
+  export const PieChart: Icon;
+  export const Percent: Icon;
+  export const ArrowDownRight: Icon;
+  export const Shield: Icon;
+  export const LogIn: Icon;
+  export const EyeOff: Icon;
+  export const UploadCloud: Icon;
+  export const File: Icon;
+  export const Image: Icon;
+  export const ChevronDown: Icon;
+  export const ChevronUp: Icon;
+  export const SlidersHorizontal: Icon;
 }

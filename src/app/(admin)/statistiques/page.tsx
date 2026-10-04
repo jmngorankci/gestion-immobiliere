@@ -47,7 +47,7 @@ export default function StatistiquesPage() {
   const tauxOccupation = totalBiens > 0 ? Math.round((biensOccupes / totalBiens) * 100) : 0;
 
   // Rendement Brut / Revenu locatif annuel théorique du parc
-  const loyerMensuelTotal = biens.reduce((sum, b) => sum + b.loyer_mensuel_reference, 0);
+  const loyerMensuelTotal = biens.reduce((sum, b) => sum + (b.loyer_mensuel_reference ?? 0), 0);
   const revenuAnnuelTheorique = loyerMensuelTotal * 12;
 
   // Impayés du mois en cours
@@ -105,7 +105,7 @@ export default function StatistiquesPage() {
     const occupes = biensOfType.filter((b) => b.est_occupe).length;
     const dispo = total - occupes;
     const percentOccup = total > 0 ? Math.round((occupes / total) * 100) : 0;
-    const loyerMoyen = total > 0 ? Math.round(biensOfType.reduce((s, b) => s + b.loyer_mensuel_reference, 0) / total) : 0;
+    const loyerMoyen = total > 0 ? Math.round(biensOfType.reduce((s, b) => s + (b.loyer_mensuel_reference ?? 0), 0) / total) : 0;
 
     return {
       type,
@@ -155,7 +155,7 @@ export default function StatistiquesPage() {
     }
     communesMap[commune].total += 1;
     if (b.est_occupe) communesMap[commune].occupes += 1;
-    communesMap[commune].loyerTotal += b.loyer_mensuel_reference;
+    communesMap[commune].loyerTotal += (b.loyer_mensuel_reference ?? 0);
   });
 
   const communesStats = Object.entries(communesMap).map(([nom, data]) => ({

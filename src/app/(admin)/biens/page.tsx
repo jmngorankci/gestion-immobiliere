@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Bien, ContratBail, PropertyType, Proprietaire } from '@/types/database.types';
 import { formatFCFA, formatDateFR } from '@/lib/utils';
@@ -26,8 +26,14 @@ import {
   Tag,
   List,
   Sparkles,
+  Camera,
+  Loader2,
+  Filter,
+  X,
 } from 'lucide-react';
 import { ProprietaireBiensModal } from '@/components/admin/ProprietaireBiensModal';
+import { DocumentUploader } from '@/components/admin/DocumentUploader';
+import { createClient } from '@/lib/supabase/client';
 
 export default function BiensPage() {
   const {
@@ -35,6 +41,8 @@ export default function BiensPage() {
     proprietaires,
     contrats,
     profiles,
+    typesBiens,
+    ajouterTypeBien,
     ajouterBien,
     modifierBien,
     supprimerBien,
@@ -43,6 +51,7 @@ export default function BiensPage() {
     supprimerProprietaire,
     ajouterLocataireEtContrat,
     modifierContrat,
+    attribuerAccesUtilisateur,
     modifierAccesUtilisateur,
     resilierContrat,
     supprimerContrat,
@@ -52,9 +61,14 @@ export default function BiensPage() {
   const [activeTab, setActiveTab] = useState<'proprietaires' | 'biens' | 'locataires' | 'liste-biens'>('proprietaires');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Filters for Liste des Biens
+  const [filterTypeBien, setFilterTypeBien] = useState<string>('tous');
+  const [filterIntention, setFilterIntention] = useState<string>('tous');
+
   // Modals visibility
   const [showBienModal, setShowBienModal] = useState(false);
   const [editingBien, setEditingBien] = useState<Bien | null>(null);
+  const [showPhotoPromptBien, setShowPhotoPromptBien] = useState(false);
 
   const [showPropModal, setShowPropModal] = useState(false);
   const [editingProp, setEditingProp] = useState<Proprietaire | null>(null);
@@ -67,13 +81,20 @@ export default function BiensPage() {
 
   // Form states: Bien
   const [bienCode, setBienCode] = useState('');
-  const [bienType, setBienType] = useState<PropertyType>('3_pieces');
+  const [bienType, setBienType] = useState('');
   const [bienLoyer, setBienLoyer] = useState<number | ''>('');
   const [bienCommune, setBienCommune] = useState('');
   const [bienAdresse, setBienAdresse] = useState('');
   const [bienPropId, setBienPropId] = useState('');
   const [bienDescription, setBienDescription] = useState('');
   const [bienPhoto, setBienPhoto] = useState('');
+  const [bienIntention, setBienIntention] = useState<'location' | 'vente' | 'mixte'>('location');
+  const [bienPrixVente, setBienPrixVente] = useState<number | ''>('');
+
+  const bienFileInputRef = useRef<HTMLInputElement>(null);
+  const bienCameraInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const supabase = createClient();
 
   // Form states: Proprietaire
   const [propNom, setPropNom] = useState('');
@@ -98,13 +119,16 @@ export default function BiensPage() {
   const handleOpenAddBien = () => {
     setEditingBien(null);
     setBienCode('');
-    setBienType('3_pieces');
+    setBienType(typesBiens.length > 0 ? typesBiens[0].nom : '');
     setBienLoyer('');
     setBienCommune('');
     setBienAdresse('');
     setBienPropId(proprietaires[0]?.id || '');
     setBienDescription('');
     setBienPhoto('');
+    setBienIntention('location');
+    setBienPrixVente('');
+    setShowPhotoPromptBien(false);
     setShowBienModal(true);
   };
 
@@ -113,31 +137,63 @@ export default function BiensPage() {
     setEditingBien(b);
     setBienCode(b.code_reference);
     setBienType(b.type_bien);
-    setBienLoyer(b.loyer_mensuel_reference);
+    setBienLoyer(b.loyer_mensuel_reference ?? '');
     setBienCommune(b.commune_quartier);
     setBienAdresse(b.adresse_precise);
     setBienPropId(b.proprietaire_id);
     setBienDescription(b.description || '');
     setBienPhoto(b.photos_urls?.[0] || '');
+    setBienIntention(b.intention || 'location');
+    setBienPrixVente(b.prix_vente_demande ?? (b as any).prix_vente ?? '');
+    setShowPhotoPromptBien(false);
     setShowBienModal(true);
   };
 
   // Submit Bien (Add or Update)
-  const handleSubmitBien = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!bienCode.trim() || !bienCommune.trim() || !bienLoyer || Number(bienLoyer) <= 0 || !bienPropId) {
-      alert('Veuillez remplir correctement les champs obligatoires.');
+  const handleBienPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingPhoto(true);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `bien_${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+    const filePath = `photos_biens/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documents_contrats')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      alert("Erreur lors de l'upload de la photo: " + uploadError.message);
+      setIsUploadingPhoto(false);
       return;
     }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents_contrats')
+      .getPublicUrl(filePath);
+
+    setBienPhoto(publicUrl);
+    setIsUploadingPhoto(false);
+    if (bienFileInputRef.current) bienFileInputRef.current.value = '';
+    if (bienCameraInputRef.current) bienCameraInputRef.current.value = '';
+  };
+
+  const saveBienCore = async () => {
+    const numLoyer = bienLoyer ? Number(bienLoyer) : null;
+    const numPrixVente = bienPrixVente ? Number(bienPrixVente) : 0;
 
     if (editingBien) {
       await modifierBien(editingBien.id, {
         code_reference: bienCode,
         type_bien: bienType,
-        loyer_mensuel_reference: Number(bienLoyer),
+        loyer_mensuel_reference: numLoyer,
         commune_quartier: bienCommune,
         adresse_precise: bienAdresse,
         proprietaire_id: bienPropId,
+        intention: bienIntention,
+        prix_vente_demande: numPrixVente,
+        prix_vente: numPrixVente,
         description: bienDescription,
         photos_urls: bienPhoto ? [bienPhoto] : [],
       });
@@ -145,17 +201,45 @@ export default function BiensPage() {
       await ajouterBien({
         code_reference: bienCode,
         type_bien: bienType,
-        loyer_mensuel_reference: Number(bienLoyer),
+        loyer_mensuel_reference: numLoyer,
         commune_quartier: bienCommune,
         adresse_precise: bienAdresse,
         proprietaire_id: bienPropId,
+        intention: bienIntention,
+        prix_vente_demande: numPrixVente,
+        prix_vente: numPrixVente,
         est_occupe: false,
+        statut_vente: 'disponible',
         description: bienDescription,
         photos_urls: bienPhoto ? [bienPhoto] : [],
       });
     }
 
     setShowBienModal(false);
+  };
+
+  const handleSubmitBien = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bienCode.trim() || !bienCommune.trim() || !bienPropId) {
+      alert('Veuillez remplir le code référence, la commune et le propriétaire.');
+      return;
+    }
+    if (bienIntention !== 'vente' && (!bienLoyer || Number(bienLoyer) <= 0)) {
+      alert('Veuillez indiquer un loyer mensuel de référence valide.');
+      return;
+    }
+    if ((bienIntention === 'vente' || bienIntention === 'mixte') && (!bienPrixVente || Number(bienPrixVente) <= 0)) {
+      alert('Veuillez indiquer un prix de vente valide.');
+      return;
+    }
+
+    // Si aucune photo n'a été ajoutée, demander à l'utilisateur s'il veut ajouter une photo avant de fermer
+    if (!bienPhoto || bienPhoto.trim() === '') {
+      setShowPhotoPromptBien(true);
+      return;
+    }
+
+    await saveBienCore();
   };
 
   // Open Add Proprietaire Modal
@@ -312,20 +396,72 @@ export default function BiensPage() {
     }
   };
 
+  // Unique property types list (from typesBiens catalog and existing properties)
+  const uniqueTypes = Array.from(
+    new Set([
+      ...typesBiens.map((t) => t.nom.trim()),
+      ...biens.map((b) => (b.type_bien || '').trim()).filter(Boolean),
+    ])
+  ).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+
+  // Intention counts
+  const countAll = biens.length;
+  const countLocation = biens.filter((b) => (b.intention || 'location') === 'location').length;
+  const countVente = biens.filter((b) => b.intention === 'vente').length;
+  const countMixte = biens.filter((b) => b.intention === 'mixte').length;
+
   // Filtered lists
   const query = searchQuery.toLowerCase();
 
-  // All properties filtered
+  // Tab 4: All properties filtered by search query, type_bien and intention
   const filteredAllBiens = biens.filter((b) => {
-    return (
-      b.code_reference.toLowerCase().includes(query) ||
-      b.commune_quartier.toLowerCase().includes(query) ||
-      b.adresse_precise.toLowerCase().includes(query)
-    );
+    // Intention Filter
+    if (filterIntention !== 'tous') {
+      const bienIntention = b.intention || 'location';
+      if (bienIntention !== filterIntention) return false;
+    }
+
+    // Type de Bien Filter
+    if (filterTypeBien !== 'tous') {
+      if ((b.type_bien || '').trim().toLowerCase() !== filterTypeBien.trim().toLowerCase()) {
+        return false;
+      }
+    }
+
+    // Text Search
+    if (query) {
+      const prop = proprietaires.find((p) => p.id === b.proprietaire_id);
+      const matchesCode = b.code_reference.toLowerCase().includes(query);
+      const matchesCommune = b.commune_quartier.toLowerCase().includes(query);
+      const matchesAdresse = b.adresse_precise.toLowerCase().includes(query);
+      const matchesType = (b.type_bien || '').toLowerCase().includes(query);
+      const matchesIntention = (b.intention || '').toLowerCase().includes(query);
+      const matchesProp = prop?.nom_complet.toLowerCase().includes(query);
+
+      if (!matchesCode && !matchesCommune && !matchesAdresse && !matchesType && !matchesIntention && !matchesProp) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
-  // Only AVAILABLE properties filtered (est_occupe === false)
-  const availableBiens = filteredAllBiens.filter((b) => !b.est_occupe);
+  // Only AVAILABLE rental properties filtered (est_occupe === false and intention !== 'vente')
+  const availableBiens = biens.filter((b) => {
+    if (b.est_occupe || b.intention === 'vente') return false;
+    if (query) {
+      const prop = proprietaires.find((p) => p.id === b.proprietaire_id);
+      const matchesCode = b.code_reference.toLowerCase().includes(query);
+      const matchesCommune = b.commune_quartier.toLowerCase().includes(query);
+      const matchesAdresse = b.adresse_precise.toLowerCase().includes(query);
+      const matchesType = (b.type_bien || '').toLowerCase().includes(query);
+      const matchesProp = prop?.nom_complet.toLowerCase().includes(query);
+      if (!matchesCode && !matchesCommune && !matchesAdresse && !matchesType && !matchesProp) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   const filteredProprietaires = proprietaires.filter((p) => {
     return (
@@ -615,9 +751,18 @@ export default function BiensPage() {
                       <div className="absolute top-3 left-3 bg-slate-950/85 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs font-mono font-bold text-white shadow">
                         {bien.code_reference}
                       </div>
-                      <div className="absolute top-3 right-3">
+                      <div className="absolute top-3 right-3 flex flex-col items-end gap-1">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-extrabold bg-amber-500 text-white shadow">
                           Disponible
+                        </span>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold shadow ${
+                            bien.intention === 'mixte'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-blue-600 text-white'
+                          }`}
+                        >
+                          {bien.intention === 'mixte' ? 'Mixte (Loc/Vente)' : 'Location'}
                         </span>
                       </div>
                     </div>
@@ -640,7 +785,7 @@ export default function BiensPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-slate-500">Loyer mensuel :</span>
                           <span className="font-mono font-extrabold text-slate-900 text-base">
-                            {formatFCFA(bien.loyer_mensuel_reference)}
+                            {formatFCFA(bien.loyer_mensuel_reference ?? 0)}
                           </span>
                         </div>
 
@@ -814,17 +959,121 @@ export default function BiensPage() {
 
       {/* ======================= TAB 4: LISTE DES BIENS (TABLEAU COMPLET) ======================= */}
       {activeTab === 'liste-biens' && (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in duration-200">
-          <div className="overflow-x-auto">
+        <div className="space-y-4 animate-in fade-in duration-200">
+          {/* Barre de filtres : Type de bien & Intention */}
+          <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4">
+            {/* Filtre Intention */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center mr-1">
+                <Filter className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
+                Intention :
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilterIntention('tous')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center ${
+                  filterIntention === 'tous'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Toutes ({countAll})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterIntention('location')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center ${
+                  filterIntention === 'location'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                }`}
+              >
+                Location ({countLocation})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterIntention('vente')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center ${
+                  filterIntention === 'vente'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
+                }`}
+              >
+                Vente ({countVente})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterIntention('mixte')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center ${
+                  filterIntention === 'mixte'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
+                }`}
+              >
+                Mixte ({countMixte})
+              </button>
+            </div>
+
+            {/* Filtre Type de Bien & Réinitialisation */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center">
+                  <Home className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
+                  Type de bien :
+                </label>
+                <select
+                  value={filterTypeBien}
+                  onChange={(e) => setFilterTypeBien(e.target.value)}
+                  className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none min-w-[170px]"
+                >
+                  <option value="tous">Tous les types ({biens.length})</option>
+                  {uniqueTypes.map((t) => {
+                    const countForType = biens.filter(
+                      (b) => (b.type_bien || '').trim().toLowerCase() === t.trim().toLowerCase()
+                    ).length;
+                    return (
+                      <option key={t} value={t}>
+                        {t} ({countForType})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {(filterTypeBien !== 'tous' || filterIntention !== 'tous') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterTypeBien('tous');
+                    setFilterIntention('tous');
+                  }}
+                  className="inline-flex items-center px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition"
+                  title="Réinitialiser les filtres"
+                >
+                  <X className="w-3.5 h-3.5 mr-1" />
+                  Effacer filtres
+                </button>
+              )}
+
+              <div className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                {filteredAllBiens.length} bien{filteredAllBiens.length > 1 ? 's' : ''} affiché{filteredAllBiens.length > 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+
+          {/* Tableau complet */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-slate-700 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="py-3.5 px-4">Code Référence</th>
                   <th className="py-3.5 px-4">Type de Bien</th>
+                  <th className="py-3.5 px-4 text-center">Intention</th>
                   <th className="py-3.5 px-4">Commune & Quartier</th>
                   <th className="py-3.5 px-4">Adresse Précise</th>
                   <th className="py-3.5 px-4">Propriétaire</th>
-                  <th className="py-3.5 px-4 text-right">Loyer Mensuel</th>
+                  <th className="py-3.5 px-4 text-right">Loyer / Prix</th>
                   <th className="py-3.5 px-4 text-center">Statut</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
@@ -845,6 +1094,22 @@ export default function BiensPage() {
                         {bien.type_bien.replace('_', ' ')}
                       </td>
 
+                      <td className="py-3.5 px-4 text-center">
+                        {bien.intention === 'vente' ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                            Vente
+                          </span>
+                        ) : bien.intention === 'mixte' ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                            Mixte
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                            Location
+                          </span>
+                        )}
+                      </td>
+
                       <td className="py-3.5 px-4 text-slate-900 font-bold text-xs">
                         {bien.commune_quartier}
                       </td>
@@ -861,7 +1126,34 @@ export default function BiensPage() {
                       </td>
 
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 text-sm">
-                        {formatFCFA(bien.loyer_mensuel_reference)}
+                        {bien.intention === 'vente' ? (
+                          <div>
+                            <span className="text-purple-700">
+                              {formatFCFA(bien.prix_vente_demande ?? (bien as any).prix_vente ?? 0)}
+                            </span>
+                            <span className="block text-[10px] text-slate-400 font-sans font-normal uppercase">
+                              Prix Vente
+                            </span>
+                          </div>
+                        ) : bien.intention === 'mixte' ? (
+                          <div>
+                            <span className="text-emerald-700">
+                              {formatFCFA(bien.loyer_mensuel_reference ?? 0)}
+                            </span>
+                            <span className="block text-[10px] text-indigo-600 font-sans font-normal">
+                              Vente: {formatFCFA(bien.prix_vente_demande ?? 0)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div>
+                            <span>
+                              {formatFCFA(bien.loyer_mensuel_reference ?? 0)}
+                            </span>
+                            <span className="block text-[10px] text-slate-400 font-sans font-normal">
+                              / mois
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-center">
@@ -903,8 +1195,29 @@ export default function BiensPage() {
                 })}
                 {filteredAllBiens.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
-                      Aucun bien trouvé dans le parc immobilier.
+                    <td colSpan={9} className="py-12 text-center text-slate-500">
+                      <div className="flex flex-col items-center justify-center space-y-2">
+                        <AlertCircle className="w-8 h-8 text-slate-300" />
+                        <p className="text-sm font-semibold text-slate-700">Aucun bien trouvé</p>
+                        <p className="text-xs text-slate-400 max-w-sm">
+                          {filterTypeBien !== 'tous' || filterIntention !== 'tous' || searchQuery
+                            ? 'Aucun bien ne correspond aux filtres ou à la recherche actuels.'
+                            : 'Aucun bien enregistré dans le parc immobilier.'}
+                        </p>
+                        {(filterTypeBien !== 'tous' || filterIntention !== 'tous' || searchQuery) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFilterTypeBien('tous');
+                              setFilterIntention('tous');
+                              setSearchQuery('');
+                            }}
+                            className="mt-2 text-xs font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-xl transition cursor-pointer"
+                          >
+                            Réinitialiser tous les filtres
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -912,7 +1225,8 @@ export default function BiensPage() {
             </table>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* ======================= MODAL: BIEN IMMOBILIER ======================= */}
       {showBienModal && (
@@ -950,20 +1264,32 @@ export default function BiensPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 uppercase">
-                    Type de Bien *
-                  </label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-700 uppercase">
+                      Type de Bien *
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={async () => {
+                        const nom = prompt("Nouveau type de bien (ex: Terrain, Magasin) :");
+                        if (nom && nom.trim() !== '') {
+                          const newType = await ajouterTypeBien(nom.trim());
+                          setBienType(newType.nom);
+                        }
+                      }} 
+                      className="text-[10px] text-emerald-600 font-bold hover:underline"
+                    >
+                      + Ajouter
+                    </button>
+                  </div>
                   <select
                     value={bienType}
-                    onChange={(e) => setBienType(e.target.value as PropertyType)}
+                    onChange={(e) => setBienType(e.target.value)}
                     className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-semibold"
                   >
-                    <option value="studio">Studio</option>
-                    <option value="2_pieces">2 Pièces</option>
-                    <option value="3_pieces">3 Pièces</option>
-                    <option value="appartement">Appartement (4+ pièces)</option>
-                    <option value="villa">Villa / Duplex</option>
-                    <option value="maison_basse">Maison Basse</option>
+                    {typesBiens.map(t => (
+                      <option key={t.id} value={t.nom}>{t.nom}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1002,6 +1328,39 @@ export default function BiensPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase">
+                    Intention *
+                  </label>
+                  <select
+                    value={bienIntention}
+                    onChange={(e) => setBienIntention(e.target.value as any)}
+                    className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-semibold"
+                  >
+                    <option value="location">Location uniquement</option>
+                    <option value="vente">Vente uniquement</option>
+                    <option value="mixte">Mixte (Location ou Vente)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 uppercase">
+                    Prix de Vente (FCFA)
+                  </label>
+                  <input
+                    type="number"
+                    value={bienPrixVente}
+                    onChange={(e) => setBienPrixVente(e.target.value === '' ? '' : Number(e.target.value))}
+                    min={1000000}
+                    step={500000}
+                    placeholder="Ex: 85000000"
+                    disabled={bienIntention === 'location'}
+                    className="w-full text-sm p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono font-bold disabled:opacity-50"
+                  />
                 </div>
               </div>
 
@@ -1046,17 +1405,54 @@ export default function BiensPage() {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 uppercase">
-                  URL Photo (Optionnel)
+              <div className="space-y-1.5" id="photo-bien-section">
+                <label className="text-xs font-bold text-slate-700 uppercase flex items-center justify-between">
+                  <span>Photo du Bien</span>
+                  <span className="text-[10px] text-slate-400 font-normal">JPG, PNG ou Caméra</span>
                 </label>
-                <input
-                  type="text"
-                  value={bienPhoto}
-                  onChange={(e) => setBienPhoto(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
-                />
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={bienPhoto}
+                    onChange={(e) => setBienPhoto(e.target.value)}
+                    placeholder="Lien URL ou boutons..."
+                    className="flex-1 w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => bienFileInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    className="inline-flex items-center px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 shadow-sm disabled:opacity-50 h-[38px]"
+                  >
+                    📁 Parcourir
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => bienCameraInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    className="inline-flex items-center px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 shadow-sm disabled:opacity-50 h-[38px]"
+                  >
+                    {isUploadingPhoto ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Camera className="w-3.5 h-3.5 mr-1.5" />}
+                    Photo
+                  </button>
+                </div>
+
+                {bienPhoto && (
+                  <div className="relative mt-2 w-28 h-28 rounded-2xl overflow-hidden border border-slate-200 shadow-xs group">
+                    <img src={bienPhoto} alt="Aperçu bien" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setBienPhoto('')}
+                      className="absolute top-1.5 right-1.5 bg-rose-600 text-white p-1 rounded-full text-xs shadow-md hover:bg-rose-500 transition"
+                      title="Supprimer la photo"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                <input type="file" ref={bienFileInputRef} className="hidden" accept="image/*" onChange={handleBienPhotoUpload} />
+                <input type="file" ref={bienCameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleBienPhotoUpload} />
               </div>
 
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200">
@@ -1075,6 +1471,65 @@ export default function BiensPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= MODAL: CONFIRMATION AJOUT PHOTO BIEN ======================= */}
+      {showPhotoPromptBien && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto shadow-xs">
+              <Camera className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">
+                Ajouter une photo à ce bien ?
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Aucune photo n'a encore été sélectionnée pour ce bien. Souhaitez-vous en ajouter une maintenant avant que le formulaire ne se ferme ?
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPhotoPromptBien(false);
+                  const section = document.getElementById('photo-bien-section');
+                  if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                  setTimeout(() => {
+                    bienFileInputRef.current?.click();
+                  }, 150);
+                }}
+                className="flex-1 inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-700/20 active:scale-95 transition cursor-pointer"
+              >
+                <Camera className="w-4 h-4 mr-1.5" />
+                Oui, ajouter une photo
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPhotoPromptBien(false);
+                  saveBienCore();
+                }}
+                className="flex-1 inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 active:scale-95 transition cursor-pointer"
+              >
+                Non, enregistrer sans photo
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowPhotoPromptBien(false)}
+              className="text-[11px] text-slate-400 hover:text-slate-600 underline font-medium pt-1 cursor-pointer"
+            >
+              Revenir au formulaire
+            </button>
           </div>
         </div>
       )}
@@ -1273,27 +1728,51 @@ export default function BiensPage() {
                 </p>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700">Sélectionnez le Bien à Louer *</label>
-                  <select
-                    value={locBienId}
-                    onChange={(e) => {
-                      setLocBienId(e.target.value);
-                      const b = biens.find((item) => item.id === e.target.value);
-                      if (b) {
-                        setLocLoyer(b.loyer_mensuel_reference);
-                        setLocCaution(b.loyer_mensuel_reference * 2);
-                      }
-                    }}
-                    className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl font-semibold"
-                    required
-                  >
-                    <option value="">-- Sélectionner un bien immobilier --</option>
-                    {biens.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.code_reference} - {b.commune_quartier} ({formatFCFA(b.loyer_mensuel_reference)}/mois) {b.est_occupe ? '(Déjà occupé)' : '(Libre)'}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex justify-between items-center">
+                    <label className="text-[11px] font-bold text-slate-700">Sélectionnez le Bien à Louer *</label>
+                    <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">
+                      Biens disponibles uniquement
+                    </span>
+                  </div>
+                  {(() => {
+                    const biensEligiblesLocation = biens.filter((b) => {
+                      const isEligibleIntention = b.intention === 'location' || b.intention === 'mixte' || !b.intention;
+                      if (!isEligibleIntention) return false;
+                      // When editing an existing lease, keep the currently linked property selectable
+                      if (editingContrat && b.id === locBienId) return true;
+                      // For a new lease, only allow available properties (not already occupied)
+                      return !b.est_occupe;
+                    });
+                    return (
+                      <>
+                        <select
+                          value={locBienId}
+                          onChange={(e) => {
+                            setLocBienId(e.target.value);
+                            const b = biens.find((item) => item.id === e.target.value);
+                            if (b) {
+                              setLocLoyer(b.loyer_mensuel_reference ?? 0);
+                              setLocCaution((b.loyer_mensuel_reference ?? 0) * 2);
+                            }
+                          }}
+                          className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl font-semibold"
+                          required
+                        >
+                          <option value="">-- Sélectionner un bien disponible --</option>
+                          {biensEligiblesLocation.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.code_reference} - {b.commune_quartier} [{b.intention === 'mixte' ? 'Mixte' : 'Location'}] ({formatFCFA(b.loyer_mensuel_reference ?? 0)}/mois)
+                            </option>
+                          ))}
+                        </select>
+                        {biensEligiblesLocation.length === 0 && (
+                          <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200 mt-1">
+                            Aucun bien disponible à la location actuellement (tous les biens éligibles sont déjà occupés ou en vente).
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1388,6 +1867,10 @@ export default function BiensPage() {
                 />
               </div>
 
+              <div className="pt-4 border-t border-slate-200">
+                <DocumentUploader contratBailId={editingContrat?.id} />
+              </div>
+
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
@@ -1430,8 +1913,8 @@ export default function BiensPage() {
             setProprietaireForBiensModal(null);
             handleOpenAddLocataire();
             setLocBienId(b.id);
-            setLocLoyer(b.loyer_mensuel_reference);
-            setLocCaution(b.loyer_mensuel_reference * 2);
+            setLocLoyer(b.loyer_mensuel_reference ?? 0);
+            setLocCaution((b.loyer_mensuel_reference ?? 0) * 2);
           }}
         />
       )}

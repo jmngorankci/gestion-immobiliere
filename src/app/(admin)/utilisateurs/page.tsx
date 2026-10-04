@@ -679,13 +679,13 @@ export default function UtilisateursAccessPage() {
                       onChange={(e) => {
                         setBienId(e.target.value);
                         const b = biens.find((item) => item.id === e.target.value);
-                        if (b) setLoyer(b.loyer_mensuel_reference);
+                        if (b) setLoyer(b.loyer_mensuel_reference ?? 0);
                       }}
                       className="w-full text-xs p-2 bg-white border border-slate-300 rounded-xl"
                     >
                       {biens.map((b) => (
                         <option key={b.id} value={b.id}>
-                          {b.code_reference} - {b.commune_quartier} ({formatFCFA(b.loyer_mensuel_reference)}) {b.est_occupe ? '(Déjà occupé)' : '(Libre)'}
+                          {b.code_reference} - {b.commune_quartier} ({formatFCFA(b.loyer_mensuel_reference ?? 0)}) {b.est_occupe ? '(Déjà occupé)' : '(Libre)'}
                         </option>
                       ))}
                     </select>
